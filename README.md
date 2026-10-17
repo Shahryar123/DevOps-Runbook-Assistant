@@ -1,32 +1,32 @@
 # Runbook Assistant
 
-An AI assistant that answers DevOps troubleshooting questions (IIS, Windows Server, AWS, Azure, CI/CD). It uses RAG over the markdown runbooks in `data/runbooks/`.
+An AI chat assistant for DevOps troubleshooting. You ask a question like *"My IIS app pool keeps stopping, what do I check?"* and it answers using our own runbooks (step-by-step troubleshooting guides) in `data/runbooks/`.
 
-**Stack:** Python, uv, LangChain, LangGraph, Chroma, LangSmith, Streamlit, and OpenAI models through `langchain-openai`.
+## How it works
 
-## Quick start
+1. **Runbooks**: markdown guides for common problems, stored in `data/runbooks/`.
+2. **Ingest**: the runbooks are split into small pieces and stored in a local search database (Chroma).
+3. **Ask**: when you ask a question, the most relevant pieces are found and given to an OpenAI model, which writes the answer.
+
+## Getting started
 
 ```powershell
-cp .env.example .env        # then fill in OPENAI_API_KEY (and LangSmith keys if you want tracing)
-uv sync
-uv run python scripts/check_setup.py
+cp .env.example .env                    # add your OPENAI_API_KEY
+uv sync                                 # install dependencies
+uv run python scripts/check_setup.py    # check that your keys work
 ```
 
-## Commands
+## Folders
 
-| Task | Command |
+| Folder | What's inside |
 |---|---|
-| Check keys | `uv run python scripts/check_setup.py` |
-| Ingest | `uv run python -m runbook_assistant.ingest` |
-| Run UI | `uv run streamlit run src/runbook_assistant/app.py` |
-| Test | `uv run pytest` |
-| Lint | `uv run ruff check . --fix && uv run ruff format .` |
+| `src/runbook_assistant/` | The application code |
+| `data/runbooks/` | The troubleshooting guides the assistant learns from |
+| `scripts/` | Helper scripts (e.g. key check) |
+| `tests/` | Automated tests |
+| `docs/milestones/` | One document per build step, explaining what changed and why |
 
-## Milestones
+## Progress
 
-Each milestone has its own document in [docs/milestones/](docs/milestones/). It explains what changed, how the new code works, and the new LangChain/LangGraph concepts it introduces.
-
-| # | Milestone | Status |
-|---|---|---|
-| 1 | [Project skeleton](docs/milestones/01-project-skeleton.md) | Done |
-| 2 | Ingest (load, chunk, embed into Chroma) | Next |
+- [x] 1. [Project skeleton](docs/milestones/01-project-skeleton.md)
+- [ ] 2. Ingest runbooks

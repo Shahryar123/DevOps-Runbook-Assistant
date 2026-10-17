@@ -17,14 +17,14 @@ def check_chat(settings: Settings) -> bool:
     For chat models the result is an AIMessage whose text is in .content.
     """
     try:
-        llm = ChatOpenAI(model=settings.router_model, api_key=settings.openai_api_key)
+        llm = ChatOpenAI(model=settings.answer_model, api_key=settings.openai_api_key)
         reply = llm.invoke("Reply with exactly: OK")
         print(
-            f"[PASS] chat ({settings.router_model}): {str(reply.content).strip()[:50]}"
+            f"[PASS] chat ({settings.answer_model}): {str(reply.content).strip()[:50]}"
         )
         return True
     except Exception as exc:  # noqa: BLE001 - report any failure
-        print(f"[FAIL] chat ({settings.router_model}): {type(exc).__name__}: {exc}")
+        print(f"[FAIL] chat ({settings.answer_model}): {type(exc).__name__}: {exc}")
         return False
 
 

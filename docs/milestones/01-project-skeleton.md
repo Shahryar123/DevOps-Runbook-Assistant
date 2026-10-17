@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     langsmith_api_key: SecretStr | None = None
     langsmith_project: str = "runbook-assistant"
     answer_model: str = "gpt-5.4-mini"
-    router_model: str = "gpt-5.4-nano"
+    router_model: str = "gpt-5.4-mini"
     embedding_model: str = "text-embedding-3-small"
     runbooks_dir: Path = PROJECT_ROOT / "data" / "runbooks"
     chroma_dir: Path = PROJECT_ROOT / "chroma_db"
@@ -65,12 +65,9 @@ The rest of the code should always get config with `get_settings()`. Don't hardc
 ### `scripts/check_setup.py`
 
 1. Loads the settings and turns on tracing.
-2. `check_chat`: `ChatOpenAI(model=router_model).invoke("Reply with exactly: OK")`
+2. `check_chat`: `ChatOpenAI(model=answer_model).invoke("Reply with exactly: OK")`. This uses `gpt-5.4-mini`, the model that will write the answers.
 3. `check_embeddings`: `OpenAIEmbeddings(model=embedding_model).embed_query("ping")`
 4. Prints PASS or FAIL for each check and exits with code 1 if either one fails. It never prints the key.
-
-It uses the cheap nano model so the check costs almost nothing.
-
 ### Sample runbooks
 
 All three use the same section headings:
@@ -105,7 +102,7 @@ Result when this milestone was finished:
 
 ```
 LangSmith tracing: on
-[PASS] chat (gpt-5.4-nano): OK
+[PASS] chat (gpt-5.4-mini): OK
 [PASS] embeddings (text-embedding-3-small): dimension=1536
 ```
 

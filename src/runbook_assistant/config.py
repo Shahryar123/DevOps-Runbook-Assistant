@@ -31,7 +31,7 @@ class Settings(BaseSettings):
 
     # Models
     answer_model: str = "gpt-5.4-mini"
-    router_model: str = "gpt-5.4-nano"
+    router_model: str = "gpt-5.4-mini"
     embedding_model: str = "text-embedding-3-small"
 
     # Paths

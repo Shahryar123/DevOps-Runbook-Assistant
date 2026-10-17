@@ -10,7 +10,7 @@ AWS, Azure, CI/CD) using RAG over runbooks in data/runbooks/.
 - LangGraph for the agent flow, Chroma as local vector store
 - LangSmith for tracing and evaluation
 - Streamlit UI
-- Models: gpt-5.4-mini for answers, gpt-5.4-nano for routing/grading
+- Models: gpt-5.4-mini for everything (answers, routing, grading)
 
 ## Commands
 
