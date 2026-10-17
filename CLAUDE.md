@@ -34,3 +34,7 @@ AWS, Azure, CI/CD) using RAG over runbooks in data/runbooks/.
 - All config via config.py — no hardcoded keys, model names, or paths
 - Type hints everywhere; keep functions small
 - Never read or print .env contents
+- After each milestone, add docs/milestones/NN-<slug>.md covering: what changed (files),
+  how it works, new concepts, how to run/verify, notes/decisions, next milestone.
+  Then add a row to the Milestones table in README.md. Small changes within a
+  milestone update that milestone's doc instead of creating a new one.
