@@ -1,0 +1,32 @@
+[project]
+name = "runbook-assistant"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "shahryar", email = "muhammadshahryar135@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "langchain>=1.4.6",
+    "langchain-chroma>=1.1.0",
+    "langchain-community>=0.4.2",
+    "langchain-openai>=1.7.2",
+    "langgraph>=1.2.16",
+    "pydantic-settings>=2.16.0",
+    "python-dotenv>=1.2.4",
+    "streamlit>=1.66.0",
+]
+
+[project.scripts]
+runbook-assistant = "runbook_assistant:main"
+
+[build-system]
+requires = ["uv_build>=0.13.1,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.17.1",
+]
