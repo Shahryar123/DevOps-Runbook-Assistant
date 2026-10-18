@@ -62,8 +62,12 @@ Ingest stops with a clear error if `title` is missing or `topic` isn't one of th
 Every chunk has this metadata:
 
 ```python
-{"source": "aws-ec2-unreachable.md", "title": "AWS EC2 Instance Unreachable",
- "topic": "networking", "section": "Diagnosis Steps > 2. Check the network path"}
+{
+    "source": "aws-ec2-unreachable.md",
+    "title": "AWS EC2 Instance Unreachable",
+    "topic": "networking",
+    "section": "Diagnosis Steps > 2. Check the network path",
+}
 ```
 
 Each chunk's ID is `<filename>::<index>`, for example `aws-ec2-unreachable.md::4`. Ingest calls `reset_collection()` and then stores everything again, so you can run it as often as you like. You never get duplicates, and if you delete a runbook its chunks are removed too.
@@ -74,8 +78,10 @@ With the current three runbooks you get 36 chunks, and the largest is 792 charac
 
 ```python
 retrieve = RunnableParallel(docs=retriever, question=RunnablePassthrough())
-generate = RunnablePassthrough.assign(context=format_docs) | PROMPT | llm | StrOutputParser()
-chain    = retrieve | RunnablePassthrough.assign(answer=generate)
+generate = (
+    RunnablePassthrough.assign(context=format_docs) | PROMPT | llm | StrOutputParser()
+)
+chain = retrieve | RunnablePassthrough.assign(answer=generate)
 ```
 
 The input is a string, and the output is `{"question", "docs", "answer"}`. `ask()` returns only `answer`. `ask_with_sources()` also returns `docs`, so `scripts/ask.py` can show you what retrieval found without searching a second time.
@@ -140,4 +146,4 @@ Run ingest a second time. You should still see `Chunks stored: 36`, which shows 
 
 ## Next milestone
 
-**Milestone 3 — LangGraph:** turn the chain into a graph. For example: route the question, retrieve, grade whether the chunks are relevant, then either answer or reply "I don't have a runbook for this".
+**[Milestone 3 — LangGraph with relevance grading](03-langgraph-grading.md):** rebuild the flow as a graph that checks each retrieved chunk for relevance, then either answers or replies "I don't have a runbook for this".

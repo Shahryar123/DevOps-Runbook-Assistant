@@ -7,6 +7,7 @@ An AI chat assistant for DevOps troubleshooting. You ask a question like *"My II
 1. **Runbooks**: markdown guides for common problems, stored in `data/runbooks/`.
 2. **Ingest**: the runbooks are split into small pieces and stored in a local search database (Chroma).
 3. **Ask**: when you ask a question, the most relevant pieces are found and given to an OpenAI model, which writes the answer.
+4. **Check**: before answering, the model checks whether each piece is actually relevant. If none are, the assistant says "I don't have a runbook for this" instead of guessing. See the [flow diagram](docs/graph.md).
 
 ## Getting started
 
@@ -30,7 +31,8 @@ uv run python scripts/check_setup.py    # check that your keys work
 
 - [x] 1. [Project skeleton](docs/milestones/01-project-skeleton.md)
 - [x] 2. [Basic RAG](docs/milestones/02-basic-rag.md)
-- [ ] 3. LangGraph agent flow
+- [x] 3. [LangGraph with relevance grading](docs/milestones/03-langgraph-grading.md)
+- [ ] 4. Query rewrite and topic router
 
 ## Try it
 
