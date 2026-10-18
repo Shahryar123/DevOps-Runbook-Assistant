@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     # Paths
     runbooks_dir: Path = PROJECT_ROOT / "data" / "runbooks"
     chroma_dir: Path = PROJECT_ROOT / "chroma_db"
+    chroma_collection: str = "runbooks"
+
+    # Ingest / retrieval
+    chunk_size: int = 800
+    chunk_overlap: int = 100
+    retriever_k: int = 4
+    runbook_topics: list[str] = ["deployment", "networking", "security", "cicd"]
 
 
 @lru_cache
