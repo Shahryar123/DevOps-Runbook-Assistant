@@ -4,6 +4,7 @@ Run: uv run python -m runbook_assistant.ingest
 """
 
 import re
+from collections.abc import Collection
 from pathlib import Path
 
 import yaml
@@ -40,7 +41,7 @@ def load_runbooks(directory: Path) -> list[Document]:
     ]
 
 
-def parse_frontmatter(doc: Document, allowed_topics: list[str]) -> Document:
+def parse_frontmatter(doc: Document, allowed_topics: Collection[str]) -> Document:
     """Move YAML frontmatter (title, topic) into metadata and strip it from the text."""
     source = doc.metadata["source"]
     match = FRONTMATTER_RE.match(doc.page_content)
@@ -111,7 +112,10 @@ def chunk_ids(chunks: list[Document]) -> list[str]:
 
 
 def build_chunks(
-    directory: Path, allowed_topics: list[str], chunk_size: int, chunk_overlap: int
+    directory: Path,
+    allowed_topics: Collection[str],
+    chunk_size: int,
+    chunk_overlap: int,
 ) -> tuple[int, list[Document]]:
     """Load, parse, and split all runbooks. Returns (files loaded, chunks)."""
     docs = load_runbooks(directory)

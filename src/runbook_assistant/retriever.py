@@ -33,12 +33,19 @@ def get_vector_store() -> Chroma:
     )
 
 
-def get_retriever(k: int | None = None) -> VectorStoreRetriever:
+def get_retriever(
+    k: int | None = None, metadata_filter: dict[str, str] | None = None
+) -> VectorStoreRetriever:
     """Return a retriever that fetches the top-k most similar chunks.
 
     A retriever is a Runnable: .invoke("question") -> list[Document].
     It hides how documents are found, so it can be swapped later
     (e.g. hybrid search) without changing the chain.
+
+    `metadata_filter` is a Chroma filter, e.g. {"topic": "networking"}:
+    only chunks whose metadata matches are considered in the search.
     """
-    top_k = k if k is not None else get_settings().retriever_k
-    return get_vector_store().as_retriever(search_kwargs={"k": top_k})
+    search_kwargs: dict = {"k": k if k is not None else get_settings().retriever_k}
+    if metadata_filter:
+        search_kwargs["filter"] = metadata_filter
+    return get_vector_store().as_retriever(search_kwargs=search_kwargs)

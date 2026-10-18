@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     answer_model: str = "gpt-5.4-mini"
     router_model: str = "gpt-5.4-mini"
     grader_model: str = "gpt-5.4-mini"
+    rewrite_model: str = "gpt-5.4-mini"
     embedding_model: str = "text-embedding-3-small"
 
     # Paths
@@ -44,12 +45,32 @@ class Settings(BaseSettings):
     chunk_size: int = 800
     chunk_overlap: int = 100
     retriever_k: int = 4
-    runbook_topics: list[str] = ["deployment", "networking", "security", "cicd"]
+
+    # Topics: the single source of truth. Keys are valid runbook `topic` values;
+    # descriptions are shown to the router so it can classify questions.
+    runbook_topics: dict[str, str] = {
+        "deployment": "Application hosting and releases: IIS sites and app pools, "
+        "web servers, apps crashing or stopping after a deploy.",
+        "networking": "Connectivity: DNS, firewalls, security groups, routing, "
+        "servers or VMs that cannot be reached.",
+        "security": "SSL/TLS certificates, authentication, secrets, "
+        "permissions and access errors.",
+        "cicd": "Build and release pipelines: Azure DevOps, GitHub Actions, "
+        "agents/runners, failing pipeline steps.",
+    }
+    # Router fallback when no topic fits; never valid as a runbook topic.
+    general_topic: str = "general"
 
     # LangGraph
+    max_retries: int = 1
     graph_run_name: str = "runbook-graph"
-    graph_tags: list[str] = ["milestone-3", "graph"]
+    graph_tags: list[str] = ["milestone-4", "graph"]
     graph_diagram_path: Path = PROJECT_ROOT / "docs" / "graph.md"
+
+    @property
+    def router_topics(self) -> tuple[str, ...]:
+        """Every topic the router may choose: runbook topics + the general fallback."""
+        return (*self.runbook_topics, self.general_topic)
 
 
 @lru_cache

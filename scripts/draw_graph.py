@@ -8,8 +8,9 @@ from runbook_assistant.graph.build import build_graph
 
 
 def main() -> None:
-    path = get_settings().graph_diagram_path
-    mermaid = build_graph().get_graph().draw_mermaid()
+    settings = get_settings()
+    path = settings.graph_diagram_path
+    mermaid = build_graph(settings.max_retries).get_graph().draw_mermaid()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         "# Runbook Assistant Graph\n\n"
