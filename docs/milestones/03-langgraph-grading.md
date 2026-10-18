@@ -90,4 +90,4 @@ What to expect:
 
 ## Next milestone
 
-**Milestone 4 — Query rewrite and topic router:** when nothing relevant is found, rewrite the question and retrieve again (the first loop in the graph), and send each question to a topic (`deployment`, `networking`, `security` or `cicd`) using the frontmatter metadata.
+**[Milestone 4 — Topic router and query-rewrite loop](04-router-rewrite.md):** send each question to a topic, filter retrieval by it, and rewrite the question and retry (searching every topic) when nothing relevant is found.

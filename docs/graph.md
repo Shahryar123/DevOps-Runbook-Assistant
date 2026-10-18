@@ -10,15 +10,20 @@ config:
 ---
 graph TD;
 	__start__([<p>__start__</p>]):::first
+	route_question(route_question)
 	retrieve(retrieve)
 	grade_documents(grade_documents)
+	rewrite_query(rewrite_query)
 	generate(generate)
 	no_answer(no_answer)
 	__end__([<p>__end__</p>]):::last
-	__start__ --> retrieve;
+	__start__ --> route_question;
 	grade_documents -.-> generate;
 	grade_documents -.-> no_answer;
+	grade_documents -.-> rewrite_query;
 	retrieve --> grade_documents;
+	rewrite_query --> retrieve;
+	route_question --> retrieve;
 	generate --> __end__;
 	no_answer --> __end__;
 	classDef default fill:#f2f0ff,line-height:1.2
