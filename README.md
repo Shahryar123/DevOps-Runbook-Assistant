@@ -29,4 +29,12 @@ uv run python scripts/check_setup.py    # check that your keys work
 ## Progress
 
 - [x] 1. [Project skeleton](docs/milestones/01-project-skeleton.md)
-- [ ] 2. Ingest runbooks
+- [x] 2. [Basic RAG](docs/milestones/02-basic-rag.md)
+- [ ] 3. LangGraph agent flow
+
+## Try it
+
+```powershell
+uv run python -m runbook_assistant.ingest                 # load runbooks into the search database
+uv run python scripts/ask.py "IIS app pool keeps stopping" # ask a question
+```

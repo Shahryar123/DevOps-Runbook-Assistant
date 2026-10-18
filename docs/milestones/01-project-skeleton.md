@@ -116,4 +116,4 @@ LangSmith tracing: on
 
 ## Next milestone
 
-**Milestone 2 — Ingest:** load the runbooks, split them by heading, embed the chunks and store them in Chroma at `chroma_dir`.
+**[Milestone 2 — Basic RAG](02-basic-rag.md):** ingest the runbooks into Chroma and answer questions with a retriever → prompt → LLM chain.
