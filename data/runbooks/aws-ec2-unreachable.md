@@ -95,6 +95,14 @@ journalctl -p err -b       # boot errors
 | Broken fstab / OS won't boot | Stop the instance, detach the root volume, attach it to a rescue instance, fix the files, reattach it and start the instance. Or use **EC2Rescue**. |
 | sshd / service stopped | Restart it through SSM (`sudo systemctl restart sshd`) and find out why it stopped. |
 
+## Prevention
+
+- Create CloudWatch alarms on `StatusCheckFailed_System` with the **EC2 auto-recover** action, so AWS moves the instance to healthy hardware automatically.
+- Install the SSM agent and attach `AmazonSSMManagedInstanceCore` on every instance, so you always have a way in that doesn't depend on SSH/RDP or security groups.
+- Alarm on root disk usage (CloudWatch agent `disk_used_percent`) at 80%.
+- Manage security groups, NACLs and route tables as code (Terraform/CloudFormation) and review changes, instead of editing them by hand in the console.
+- Enable the EC2 Serial Console at account level before you need it.
+
 ## Escalation
 
 - If the system status check is still failing after a stop/start, open an AWS Support case with the instance ID and the times of the failures.

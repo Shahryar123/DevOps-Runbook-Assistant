@@ -104,6 +104,14 @@ Check that the Hosting Bundle matches the app's runtime: run `dotnet --list-runt
 4. **Temporary mitigation only.** You can raise the rapid-fail threshold or turn off rapid-fail protection so the pool keeps restarting while you investigate. Never leave it this way permanently.
 5. Look at the recycling settings (`recycling.periodicRestart.privateMemory`) if pools are being recycled for memory and the limit is unrealistically low.
 
+## Prevention
+
+- Alert on WAS Event IDs 5002, 5009 and 5011 so you hear about a crashing pool before users do.
+- Use a **gMSA** (group managed service account) for custom identities, so passwords rotate automatically and can't silently break the pool.
+- Add a post-deployment smoke test that requests a health endpoint and fails the release on HTTP 503.
+- Keep the ASP.NET Core Hosting Bundle on each server at the version the app targets, and include it in server build scripts.
+- Log unhandled exceptions centrally (for example Application Insights) so crash causes are visible without a dump.
+
 ## Escalation
 
 - Escalate to the application development team with the crash dump analysis if the faulting module belongs to the application.

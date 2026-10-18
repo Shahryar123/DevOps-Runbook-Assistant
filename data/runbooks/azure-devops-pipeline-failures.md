@@ -93,6 +93,14 @@ You can also tick **Enable system diagnostics** when you re-run the pipeline.
 | Timeout | Set `timeoutInMinutes:` on the job, and find out why the step is slow or hanging. |
 | Bad cache | Change the cache key (for example add a version suffix) to invalidate it. |
 
+## Prevention
+
+- Use **workload identity federation** for Azure service connections, so there is no client secret to expire.
+- Monitor self-hosted agents: alert when an agent goes offline or its disk is above 85%, and clean `_work` folders on a schedule.
+- Validate YAML changes in a pull request pipeline before they reach `main`.
+- Version template repositories with tags (`ref: refs/tags/v1.2`) so a template change can't break every pipeline at once.
+- Set explicit `timeoutInMinutes` on long jobs instead of relying on the default.
+
 ## Escalation
 
 - Check whether Microsoft-hosted agents are affected by an outage: https://status.dev.azure.com
