@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     # Models
     answer_model: str = "gpt-5.4-mini"
     router_model: str = "gpt-5.4-mini"
+    grader_model: str = "gpt-5.4-mini"
     embedding_model: str = "text-embedding-3-small"
 
     # Paths
@@ -44,6 +45,11 @@ class Settings(BaseSettings):
     chunk_overlap: int = 100
     retriever_k: int = 4
     runbook_topics: list[str] = ["deployment", "networking", "security", "cicd"]
+
+    # LangGraph
+    graph_run_name: str = "runbook-graph"
+    graph_tags: list[str] = ["milestone-3", "graph"]
+    graph_diagram_path: Path = PROJECT_ROOT / "docs" / "graph.md"
 
 
 @lru_cache
