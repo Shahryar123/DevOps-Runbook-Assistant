@@ -1,3 +1,8 @@
+---
+title: Azure DevOps Pipeline Failures
+topic: cicd
+---
+
 # Azure DevOps Pipeline Failures
 
 **Platform:** Azure DevOps Services / Azure Pipelines (YAML and classic)

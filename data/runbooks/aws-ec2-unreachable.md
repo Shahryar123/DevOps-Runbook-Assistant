@@ -1,3 +1,8 @@
+---
+title: AWS EC2 Instance Unreachable
+topic: networking
+---
+
 # AWS EC2 Instance Unreachable
 
 **Platform:** AWS EC2 (Linux and Windows)
