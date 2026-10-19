@@ -128,7 +128,4 @@ What to expect:
 
 ## Next milestone
 
-Options to choose from:
-- **LangSmith evaluations:** a dataset of in-scope and out-of-scope questions, scoring chain vs graph on correct refusals, grounding and cost.
-- **Streamlit UI** (`app.py`).
-- **Hybrid search:** BM25 keyword search plus vector search, for exact error codes like `5002` or `AADSTS70021`.
+**[Milestone 5 — Evaluation with LangSmith](05-evaluation.md):** a 25-question dataset and 4 evaluators, used to compare the chain against the graph with and without routing.
