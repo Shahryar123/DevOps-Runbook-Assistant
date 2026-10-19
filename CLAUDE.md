@@ -16,14 +16,19 @@ AWS, Azure, CI/CD) using RAG over runbooks in data/runbooks/.
 ## Commands
 
 - Run: `uv run streamlit run src/runbook_assistant/app.py`
-- Ingest: `uv run python -m runbook_assistant.ingest`
+- Ingest (incremental): `uv run python -m runbook_assistant.ingest`
+  - `--dry-run` show the plan, no changes, no embedding calls
+  - `--validate-only` validate runbooks only, exit 0/1 (for CI)
+  - `--full` force a full rebuild
+  - Stop the Streamlit app before ingesting, then restart it (local Chroma is single-process)
 - Test: `uv run pytest`
 - Lint: `uv run ruff check . --fix && uv run ruff format .`
 
 ## Structure
 
 - src/runbook_assistant/config.py — settings loaded via pydantic-settings
-- src/runbook_assistant/ingest.py — load, chunk, embed runbooks
+- src/runbook_assistant/ingest.py — ingest CLI (flags, exit codes)
+- src/runbook_assistant/pipeline/ — sources, chunking, validation, manifest, sync, report, lock
 - src/runbook_assistant/graph/ — LangGraph state, nodes, graph builder
 - src/runbook_assistant/service.py — UI-facing logic (answer, trace link, feedback)
 - src/runbook_assistant/app.py — Streamlit chat UI (UI only; calls service.py)

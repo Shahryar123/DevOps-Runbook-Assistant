@@ -196,6 +196,19 @@ class Settings(BaseSettings):
     chunk_overlap: int = 100
     retriever_k: int = 4
 
+    # Ingest pipeline (validation, incremental sync, reporting)
+    runbook_max_bytes: int = 100_000
+    # Missing sections are warnings. Matched by heading prefix, so
+    # "Diagnosis" matches "## Diagnosis Steps".
+    runbook_expected_sections: list[str] = [
+        "Symptoms",
+        "Likely Causes",
+        "Diagnosis",
+        "Resolution",
+    ]
+    embedding_batch_size: int = 64  # texts per embedding API call
+    embedding_price_per_1m_tokens: float = 0.02  # USD, text-embedding-3-small
+
     # Topics: the single source of truth. Keys are valid runbook `topic` values;
     # descriptions are shown to the router so it can classify questions.
     runbook_topics: dict[str, str] = {
@@ -264,6 +277,19 @@ class Settings(BaseSettings):
         "multi_runbook",
         "adversarial",
     ]
+
+    # Pipeline files live next to the Chroma data they describe.
+    @property
+    def manifest_path(self) -> Path:
+        return self.chroma_dir / "manifest.json"
+
+    @property
+    def ingest_report_path(self) -> Path:
+        return self.chroma_dir / "ingest_report.json"
+
+    @property
+    def ingest_lock_path(self) -> Path:
+        return self.chroma_dir / ".ingest.lock"
 
     @property
     def router_topics(self) -> tuple[str, ...]:

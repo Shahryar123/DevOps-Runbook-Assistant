@@ -6,12 +6,12 @@ import pytest
 from langchain_core.documents import Document
 
 from runbook_assistant.config import Settings
-from runbook_assistant.ingest import (
+from runbook_assistant.pipeline.chunking import (
     chunk_ids,
-    load_runbooks,
     parse_frontmatter,
     split_runbook,
 )
+from runbook_assistant.pipeline.sources import LocalFolderSource, load_all
 
 TOPICS: list[str] = Settings.model_fields["runbook_topics"].default
 CHUNK_SIZE = 200
@@ -124,11 +124,12 @@ def test_chunk_ids_are_deterministic_and_unique() -> None:
     assert ids[0] == "sample.md::0"
 
 
-def test_load_runbooks_uses_filename_as_source(tmp_path: Path) -> None:
+def test_local_folder_source_uses_filename_as_id(tmp_path: Path) -> None:
     (tmp_path / "b.md").write_text(SAMPLE, encoding="utf-8")
     (tmp_path / "a.md").write_text(SAMPLE, encoding="utf-8")
     (tmp_path / "notes.txt").write_text("ignored", encoding="utf-8")
 
-    docs = load_runbooks(tmp_path)
+    docs = load_all(LocalFolderSource(tmp_path))
 
-    assert [d.metadata["source"] for d in docs] == ["a.md", "b.md"]
+    assert [d.source_id for d in docs] == ["a.md", "b.md"]
+    assert docs[0].content == SAMPLE

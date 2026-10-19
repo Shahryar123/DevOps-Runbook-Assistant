@@ -1,183 +1,93 @@
-"""Load, chunk, and embed runbooks from data/runbooks/ into Chroma.
+"""Ingest runbooks from data/runbooks/ into Chroma: validate, sync, report.
 
-Run: uv run python -m runbook_assistant.ingest
+Run:
+  uv run python -m runbook_assistant.ingest                  # incremental sync
+  uv run python -m runbook_assistant.ingest --dry-run        # show the plan, change nothing
+  uv run python -m runbook_assistant.ingest --validate-only  # exit 0/1 (for CI)
+  uv run python -m runbook_assistant.ingest --full           # force a full rebuild
+
+Exit codes: 0 ok, 1 validation failed, 2 embedding/index write failed,
+3 another ingest is running.
+
+The pipeline itself lives in runbook_assistant.pipeline; this module only
+parses arguments and wires in the real source, embeddings and Chroma store.
 """
 
-import re
+import argparse
+import logging
 import sys
-from collections.abc import Collection
-from pathlib import Path
+from collections.abc import Sequence
 
-import yaml
-from langchain_core.documents import Document
-from langchain_text_splitters import (
-    MarkdownHeaderTextSplitter,
-    RecursiveCharacterTextSplitter,
-)
+from langchain_chroma import Chroma
+from langchain_core.embeddings import Embeddings
 
 from runbook_assistant.config import Settings, configure_tracing, get_settings
-from runbook_assistant.guardrails import commands, injection
-from runbook_assistant.retriever import get_vector_store
-
-# A "---" block at the very start of the file, e.g. title/topic.
-FRONTMATTER_RE = re.compile(r"\A---\s*\r?\n(.*?)\r?\n---\s*(?:\r?\n|\Z)", re.DOTALL)
-
-# Markdown heading levels to split on, and the metadata key each one gets.
-HEADERS_TO_SPLIT_ON = [("#", "h1"), ("##", "h2"), ("###", "h3")]
+from runbook_assistant.pipeline.report import format_report, make_token_counter
+from runbook_assistant.pipeline.run import PipelineOptions, run_pipeline
+from runbook_assistant.pipeline.sources import LocalFolderSource
+from runbook_assistant.pipeline.sync import StoreFactory
+from runbook_assistant.retriever import get_embeddings
 
 
-def load_runbooks(directory: Path) -> list[Document]:
-    """Load every .md file in `directory` as one Document per file.
+def make_store_factory(settings: Settings) -> StoreFactory:
+    """Open the same collection the retriever uses, with the given embeddings."""
 
-    A document loader turns a source (files, URLs, databases...) into
-    LangChain `Document` objects: `page_content` (text) + `metadata` (dict).
-    For plain local files that is just "read file -> Document", so we do it
-    directly instead of depending on langchain-community (being sunset).
-    """
-    return [
-        Document(
-            page_content=path.read_text(encoding="utf-8"),
-            metadata={"source": path.name},
-        )
-        for path in sorted(directory.glob("*.md"))
-    ]
-
-
-def parse_frontmatter(doc: Document, allowed_topics: Collection[str]) -> Document:
-    """Move YAML frontmatter (title, topic) into metadata and strip it from the text."""
-    source = doc.metadata["source"]
-    match = FRONTMATTER_RE.match(doc.page_content)
-    if match is None:
-        raise ValueError(f"{source}: missing YAML frontmatter")
-
-    meta = yaml.safe_load(match.group(1)) or {}
-    title, topic = meta.get("title"), meta.get("topic")
-    if not title:
-        raise ValueError(f"{source}: frontmatter is missing 'title'")
-    if topic not in allowed_topics:
-        raise ValueError(
-            f"{source}: topic {topic!r} must be one of {', '.join(allowed_topics)}"
+    def open_store(embeddings: Embeddings) -> Chroma:
+        return Chroma(
+            collection_name=settings.chroma_collection,
+            embedding_function=embeddings,
+            persist_directory=str(settings.chroma_dir),
         )
 
-    return Document(
-        page_content=doc.page_content[match.end() :],
-        metadata={**doc.metadata, "title": str(title), "topic": topic},
+    return open_store
+
+
+def parse_args(argv: Sequence[str] | None) -> PipelineOptions:
+    parser = argparse.ArgumentParser(
+        prog="python -m runbook_assistant.ingest",
+        description="Validate runbooks and sync them into the vector index.",
+    )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="validate and show what would change; no embedding calls, no writes",
+    )
+    mode.add_argument(
+        "--validate-only",
+        action="store_true",
+        help="only validate the runbooks; exit code 0 (ok) or 1 (errors)",
+    )
+    parser.add_argument(
+        "--full", action="store_true", help="rebuild the whole index from scratch"
+    )
+    args = parser.parse_args(argv)
+    return PipelineOptions(
+        dry_run=args.dry_run, validate_only=args.validate_only, full=args.full
     )
 
 
-def section_name(header_meta: dict[str, str], fallback: str) -> str:
-    """Build a readable section label like 'Diagnosis Steps > 1. Check disk'."""
-    parts = [header_meta[key] for key in ("h2", "h3") if key in header_meta]
-    return " > ".join(parts) or header_meta.get("h1", fallback)
-
-
-def split_runbook(doc: Document, chunk_size: int, chunk_overlap: int) -> list[Document]:
-    """Split one runbook into chunks: first by headings, then by size.
-
-    Text splitters cut long documents into pieces small enough to embed and
-    retrieve precisely. Splitting on headings first keeps each chunk inside
-    one logical section; the size splitter then breaks up long sections,
-    preferring paragraph -> line -> word boundaries.
-    """
-    header_splitter = MarkdownHeaderTextSplitter(
-        headers_to_split_on=HEADERS_TO_SPLIT_ON, strip_headers=False
+def main(argv: Sequence[str] | None = None) -> int:
+    logging.basicConfig(
+        level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s"
     )
-    size_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size, chunk_overlap=chunk_overlap
-    )
-
-    chunks: list[Document] = []
-    for section in header_splitter.split_text(doc.page_content):
-        metadata = {
-            "source": doc.metadata["source"],
-            "title": doc.metadata["title"],
-            "topic": doc.metadata["topic"],
-            "section": section_name(section.metadata, doc.metadata["title"]),
-        }
-        chunks.extend(
-            Document(page_content=piece, metadata=metadata)
-            for piece in size_splitter.split_text(section.page_content)
-        )
-    return chunks
-
-
-def chunk_ids(chunks: list[Document]) -> list[str]:
-    """Deterministic IDs: '<filename>::<index within that file>'."""
-    counts: dict[str, int] = {}
-    ids: list[str] = []
-    for chunk in chunks:
-        source = chunk.metadata["source"]
-        index = counts.get(source, 0)
-        counts[source] = index + 1
-        ids.append(f"{source}::{index}")
-    return ids
-
-
-def build_chunks(
-    directory: Path,
-    allowed_topics: Collection[str],
-    chunk_size: int,
-    chunk_overlap: int,
-) -> tuple[int, list[Document]]:
-    """Load, parse, and split all runbooks. Returns (files loaded, chunks)."""
-    docs = load_runbooks(directory)
-    chunks = [
-        chunk
-        for doc in docs
-        for chunk in split_runbook(
-            parse_frontmatter(doc, allowed_topics), chunk_size, chunk_overlap
-        )
-    ]
-    return len(docs), chunks
-
-
-def check_runbooks(docs: list[Document], settings: Settings) -> None:
-    """Guardrail checks on the raw runbook text, before anything is embedded.
-
-    - Injection patterns FAIL the ingest (RunbookInjectionError): a runbook that
-      talks to the model could steer every answer it is retrieved for.
-    - Risky commands are only REPORTED: they're often the right fix, and the
-      answer will carry a warning when one is used.
-    """
-    texts = [(doc.metadata["source"], doc.page_content) for doc in docs]
-    if settings.injection_check_enabled:
-        injection.check_runbooks(texts, settings.injection_patterns)
-    if settings.command_warnings_enabled:
-        report = commands.scan_runbooks(texts, settings.dangerous_commands)
-        for source, found in report.items():
-            names = ", ".join(f"{w.name} ({w.severity})" for w in found)
-            print(f"Risky commands: {source}: {names}")
-
-
-def main() -> None:
+    options = parse_args(argv)
     settings = get_settings()
     configure_tracing(settings)
 
-    try:
-        check_runbooks(load_runbooks(settings.runbooks_dir), settings)
-    except injection.RunbookInjectionError as exc:
-        print(exc, file=sys.stderr)
-        sys.exit(1)
-
-    file_count, chunks = build_chunks(
-        settings.runbooks_dir,
-        settings.runbook_topics,
-        settings.chunk_size,
-        settings.chunk_overlap,
+    report = run_pipeline(
+        settings,
+        source=LocalFolderSource(settings.runbooks_dir),
+        embeddings_factory=get_embeddings,
+        store_factory=make_store_factory(settings),
+        count_tokens=make_token_counter(settings.embedding_model),
+        options=options,
     )
-    print(f"Files loaded:   {file_count}")
-    print(f"Chunks created: {len(chunks)}")
-    if not chunks:
-        print(f"No runbooks found in {settings.runbooks_dir}; nothing stored.")
-        return
-
-    # Rebuild from scratch so removed/renamed runbooks don't leave stale chunks.
-    store = get_vector_store()
-    store.reset_collection()
-    # add_documents embeds each chunk (OpenAI call) and saves it under its ID.
-    store.add_documents(chunks, ids=chunk_ids(chunks))
-    print(f"Chunks stored:  {len(store.get()['ids'])}")
+    print(format_report(report))
+    if report.mode == "sync":
+        print(f"Report saved to {settings.ingest_report_path}")
+    return report.exit_code
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

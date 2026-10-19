@@ -30,8 +30,8 @@ from runbook_assistant.guardrails.rate_limit import (
 )
 from runbook_assistant.guardrails.replies import BLOCKED_REPLIES, OFF_TOPIC_REPLY
 from runbook_assistant.guardrails.secrets import make_anonymizer, mask_secrets
-from runbook_assistant.ingest import check_runbooks as ingest_check_runbooks
-from runbook_assistant.ingest import load_runbooks
+from runbook_assistant.pipeline.sources import LocalFolderSource, load_all
+from runbook_assistant.pipeline.validation import validate
 
 DEFAULTS = Settings(openai_api_key="sk-test", _env_file=None)
 MASK = DEFAULTS.secret_mask
@@ -259,10 +259,13 @@ def test_runbook_injection_fails_ingest_check() -> None:
         check_runbooks(texts, DEFAULTS.injection_patterns)
 
 
-def test_real_runbooks_pass_ingest_checks(capsys: pytest.CaptureFixture) -> None:
-    ingest_check_runbooks(load_runbooks(DEFAULTS.runbooks_dir), DEFAULTS)
-    report = capsys.readouterr().out
-    assert "iis-app-pool-crashes.md: iisreset (medium)" in report  # report only
+def test_real_runbooks_pass_ingest_checks() -> None:
+    result = validate(load_all(LocalFolderSource(DEFAULTS.runbooks_dir)), DEFAULTS)
+    assert result.errors == []
+    assert (
+        "iis-app-pool-crashes.md",
+        "risky command: iisreset (medium)",
+    ) in result.warnings  # a warning, never an error
 
 
 def test_format_docs_marks_context_as_data_and_strips_tags() -> None:
