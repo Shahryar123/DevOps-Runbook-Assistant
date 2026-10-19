@@ -103,6 +103,11 @@ Check that the Hosting Bundle matches the app's runtime: run `dotnet --list-runt
    ```
 4. **Temporary mitigation only.** You can raise the rapid-fail threshold or turn off rapid-fail protection so the pool keeps restarting while you investigate. Never leave it this way permanently.
 5. Look at the recycling settings (`recycling.periodicRestart.privateMemory`) if pools are being recycled for memory and the limit is unrealistically low.
+6. **Last resort.** If several pools are stuck and `Start-WebAppPool` keeps failing, restart all of IIS during a maintenance window:
+   ```cmd
+   iisreset /restart
+   ```
+   This stops every site on the server, not just the failing one, so warn the other site owners first.
 
 ## Prevention
 

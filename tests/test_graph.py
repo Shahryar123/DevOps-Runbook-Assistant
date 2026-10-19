@@ -1,13 +1,13 @@
 """Graph wiring, routing, and loop tests. No OpenAI calls and no .env needed.
 
 LLM-backed pieces (router, retriever, grader, rewriter, generator) are
-replaced with RunnableLambda fakes, so the real node and graph logic runs.
+replaced with RunnableLambda fakes (the `settings` and `fakes` fixtures in
+conftest.py), so the real node and graph logic runs.
 """
 
 from uuid import uuid4
 
 import pytest
-from langchain_core.documents import Document
 from langchain_core.runnables import RunnableLambda
 from pydantic import ValidationError
 
@@ -20,64 +20,7 @@ from runbook_assistant.graph.build import (
     recursion_limit,
 )
 from runbook_assistant.rag import NO_ANSWER
-
-
-def make_doc(text: str) -> Document:
-    return Document(
-        page_content=text,
-        metadata={"source": "sample.md", "topic": "networking", "section": "Symptoms"},
-    )
-
-
-@pytest.fixture
-def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
-    """Settings with a dummy key, injected into the nodes module."""
-    fake = Settings(openai_api_key="sk-test", _env_file=None)
-    monkeypatch.setattr(nodes, "get_settings", lambda: fake)
-    return fake
-
-
-@pytest.fixture
-def fakes(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> dict:
-    """Replace every LLM/vector-store factory with a fake and record calls.
-
-    Default behaviour: router says "networking", retriever returns one chunk
-    echoing the query, grader rejects everything. Tests override as needed.
-    """
-    route_model = nodes.make_route_model(settings.router_topics)
-    calls: dict = {"filters": [], "queries": [], "generator_inputs": []}
-
-    def fake_get_retriever(metadata_filter: dict | None = None) -> RunnableLambda:
-        calls["filters"].append(metadata_filter)
-
-        def search(query: str) -> list[Document]:
-            calls["queries"].append(query)
-            return [make_doc(f"chunk for: {query}")]
-
-        return RunnableLambda(search)
-
-    def fake_generate(inputs: dict) -> str:
-        calls["generator_inputs"].append(inputs)
-        return f"answer to: {inputs['question']}"
-
-    monkeypatch.setattr(
-        nodes,
-        "get_router",
-        lambda: RunnableLambda(lambda _: route_model(topic="networking")),
-    )
-    monkeypatch.setattr(nodes, "get_retriever", fake_get_retriever)
-    monkeypatch.setattr(
-        nodes,
-        "get_grader",
-        lambda: RunnableLambda(lambda _: nodes.GradeDocument(binary_score="no")),
-    )
-    monkeypatch.setattr(
-        nodes,
-        "get_rewriter",
-        lambda: RunnableLambda(lambda x: f"rewritten {x['search_query']}"),
-    )
-    monkeypatch.setattr(nodes, "get_generator", lambda: RunnableLambda(fake_generate))
-    return calls
+from tests.conftest import make_doc
 
 
 def run(
@@ -124,25 +67,35 @@ def test_graph_compiles_with_expected_nodes_and_edges() -> None:
 
     assert set(drawable.nodes) == {
         "__start__",
+        "input_guardrails",
+        "blocked_reply",
         "route_question",
+        "off_topic_reply",
         "retrieve",
         "grade_documents",
         "rewrite_query",
         "generate",
+        "output_guardrails",
         "no_answer",
         "__end__",
     }
     edges = {(e.source, e.target) for e in drawable.edges}
     assert edges == {
-        ("__start__", "route_question"),
+        ("__start__", "input_guardrails"),
+        ("input_guardrails", "blocked_reply"),
+        ("input_guardrails", "route_question"),
+        ("route_question", "off_topic_reply"),
         ("route_question", "retrieve"),
         ("retrieve", "grade_documents"),
         ("grade_documents", "generate"),
         ("grade_documents", "rewrite_query"),
         ("grade_documents", "no_answer"),
         ("rewrite_query", "retrieve"),
-        ("generate", "__end__"),
+        ("generate", "output_guardrails"),
+        ("output_guardrails", "__end__"),
         ("no_answer", "__end__"),
+        ("blocked_reply", "__end__"),
+        ("off_topic_reply", "__end__"),
     }
 
 
@@ -266,7 +219,14 @@ def test_router_schema_only_allows_configured_topics(settings: Settings) -> None
 
     # The JSON schema sent to the model is restricted to the same values.
     enum = route_model.model_json_schema()["properties"]["topic"]["enum"]
-    assert enum == [*settings.runbook_topics, "general"]
+    assert enum == [*settings.runbook_topics, "general", "off_topic"]
+
+
+def test_off_topic_not_offered_when_disabled() -> None:
+    settings = Settings(
+        openai_api_key="sk-test", _env_file=None, off_topic_enabled=False
+    )
+    assert "off_topic" not in settings.router_topics
 
 
 def test_ask_graph_uses_given_run_id_and_adds_tags(
@@ -287,7 +247,6 @@ def test_ask_graph_uses_given_run_id_and_adds_tags(
             }
 
     monkeypatch.setenv("LANGSMITH_TRACING", "false")  # restored after the test
-    monkeypatch.setattr(build, "get_settings", lambda: settings)
     monkeypatch.setattr(build, "get_graph", lambda _: FakeGraph())
     run_id = uuid4()
 

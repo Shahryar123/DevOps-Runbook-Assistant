@@ -10,6 +10,8 @@ An AI chat assistant for DevOps troubleshooting. You ask a question like *"My II
 4. **Search and check**: the most relevant pieces are found, and the model checks whether each one actually helps.
 5. **Retry or answer**: if nothing useful is found, the question is reworded with more technical terms and searched again across all runbooks. If there is still nothing, the assistant says "I don't have a runbook for this" instead of guessing. Otherwise an OpenAI model writes the answer from the useful pieces.
 
+6. **Guardrails**: passwords and keys pasted into a question are hidden before anything is sent, harmful or manipulative questions are refused, risky commands (like `iisreset`) come with a warning, and the number of questions is limited.
+
 See the [flow diagram](docs/graph.md).
 
 ## Getting started
@@ -39,6 +41,7 @@ uv run python scripts/check_setup.py    # check that your keys work
 - [x] 4. [Topic router and query-rewrite loop](docs/milestones/04-router-rewrite.md)
 - [x] 5. [Evaluation with LangSmith](docs/milestones/05-evaluation.md)
 - [x] 6. [Streamlit chat UI](docs/milestones/06-streamlit-ui.md)
+- [x] 7. [Guardrails](docs/milestones/07-guardrails.md)
 
 ## Try it
 

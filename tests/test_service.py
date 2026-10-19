@@ -71,6 +71,11 @@ def test_answer_graph_maps_result_and_tags_ui_runs(
             "filtered_out": [DOC, DOC],
             "run_id": run_id,
             "latency_s": 1.5,
+            "question_sent": question,
+            "answer_body": "Restart the pool (source: a.md)",
+            "command_warnings": [],
+            "guardrail_events": [],
+            "blocked_reason": None,
         }
 
     monkeypatch.setattr(service, "ask_graph", fake_ask_graph)
@@ -99,13 +104,22 @@ def test_answer_chain_has_no_routing_or_retries(
 ) -> None:
     def fake_ask_with_sources(question, tags):
         assert tags == settings.ui_tags
-        return {"answer": NO_ANSWER, "docs": [DOC], "run_id": uuid4(), "latency_s": 0.4}
+        return {
+            "answer": NO_ANSWER,
+            "docs": [DOC],
+            "run_id": uuid4(),
+            "latency_s": 0.4,
+            "question_sent": "kubernetes? token=[MASKED_SECRET]",
+            "guardrail_events": [],
+        }
 
     monkeypatch.setattr(service, "ask_with_sources", fake_ask_with_sources)
-    result = service.answer("kubernetes?", "chain")
+    result = service.answer("kubernetes? token=abc123!x", "chain")
 
+    assert result["question"] == "kubernetes? token=[MASKED_SECRET]"
     assert result["topic"] == service.NO_ROUTING_TOPIC
-    assert result["search_queries"] == ["kubernetes?"]
+    assert result["search_queries"] == ["kubernetes? token=[MASKED_SECRET]"]
+    assert result["command_warnings"] == []
     assert result["retry_count"] == 0
     assert result["kept"] == [DOC]
     assert result["filtered_out"] == []

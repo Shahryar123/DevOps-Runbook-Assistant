@@ -42,6 +42,11 @@ def run_graph(question: str) -> None:
     print_chunks("KEPT by grader", result["kept"])
     print_chunks("FILTERED OUT by grader (all attempts)", result["filtered_out"])
 
+    print("\nGuardrails triggered:")
+    for event in result["guardrail_events"] or [{"guardrail": "none"}]:
+        detail = f": {event['detail']}" if event.get("detail") else ""
+        print(f"  - {event['guardrail']} {event.get('action', '')}{detail}")
+
     print("\n--- Answer ---")
     print(result["answer"])
 

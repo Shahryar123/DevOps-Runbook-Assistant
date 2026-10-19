@@ -18,6 +18,12 @@ from runbook_assistant.config import configure_tracing, get_settings
 # Fixed namespace so the same (dataset, case id) always gives the same UUID.
 EXAMPLE_NAMESPACE = uuid.UUID("5b7c2f0e-3a1d-4c8e-9f60-2d4a1b9e7c33")
 REQUIRED_FIELDS = ("id", "question", "reference_answer", "expected_sources", "category")
+# Optional guardrail expectations (adversarial cases), passed to the evaluators:
+#   secret: a FAKE secret in the question that must never reach the answer
+#   expect_warning: the answer must carry a risky-command warning
+#   expect_blocked: "injection" | "moderation" | "off_topic"
+GUARDRAIL_FIELDS = ("secret", "expect_warning", "expect_blocked")
+BLOCK_REASONS = ("injection", "moderation", "off_topic")
 
 
 def load_cases(path: Path, categories: Collection[str]) -> list[dict]:
@@ -34,6 +40,13 @@ def load_cases(path: Path, categories: Collection[str]) -> list[dict]:
             raise ValueError(f"line {line_no}: unknown category {case['category']!r}")
         if not isinstance(case["expected_sources"], list):
             raise TypeError(f"line {line_no}: expected_sources must be a list")
+        blocked = case.get("expect_blocked")
+        if blocked is not None and blocked not in BLOCK_REASONS:
+            raise ValueError(f"line {line_no}: unknown expect_blocked {blocked!r}")
+        if blocked and case["expected_sources"]:
+            raise ValueError(f"line {line_no}: a blocked case can't expect sources")
+        if "secret" in case and case["secret"] not in case["question"]:
+            raise ValueError(f"line {line_no}: secret must appear in the question")
         cases.append(case)
 
     ids = [case["id"] for case in cases]
@@ -56,6 +69,7 @@ def to_example(case: dict, dataset_name: str) -> dict:
         "outputs": {
             "reference_answer": case["reference_answer"],
             "expected_sources": case["expected_sources"],
+            **{field: case[field] for field in GUARDRAIL_FIELDS if field in case},
         },
         "metadata": {"case_id": case["id"], "category": case["category"]},
     }

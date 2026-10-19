@@ -4,6 +4,7 @@ Run: uv run python -m runbook_assistant.ingest
 """
 
 import re
+import sys
 from collections.abc import Collection
 from pathlib import Path
 
@@ -14,7 +15,8 @@ from langchain_text_splitters import (
     RecursiveCharacterTextSplitter,
 )
 
-from runbook_assistant.config import configure_tracing, get_settings
+from runbook_assistant.config import Settings, configure_tracing, get_settings
+from runbook_assistant.guardrails import commands, injection
 from runbook_assistant.retriever import get_vector_store
 
 # A "---" block at the very start of the file, e.g. title/topic.
@@ -129,9 +131,33 @@ def build_chunks(
     return len(docs), chunks
 
 
+def check_runbooks(docs: list[Document], settings: Settings) -> None:
+    """Guardrail checks on the raw runbook text, before anything is embedded.
+
+    - Injection patterns FAIL the ingest (RunbookInjectionError): a runbook that
+      talks to the model could steer every answer it is retrieved for.
+    - Risky commands are only REPORTED: they're often the right fix, and the
+      answer will carry a warning when one is used.
+    """
+    texts = [(doc.metadata["source"], doc.page_content) for doc in docs]
+    if settings.injection_check_enabled:
+        injection.check_runbooks(texts, settings.injection_patterns)
+    if settings.command_warnings_enabled:
+        report = commands.scan_runbooks(texts, settings.dangerous_commands)
+        for source, found in report.items():
+            names = ", ".join(f"{w.name} ({w.severity})" for w in found)
+            print(f"Risky commands: {source}: {names}")
+
+
 def main() -> None:
     settings = get_settings()
     configure_tracing(settings)
+
+    try:
+        check_runbooks(load_runbooks(settings.runbooks_dir), settings)
+    except injection.RunbookInjectionError as exc:
+        print(exc, file=sys.stderr)
+        sys.exit(1)
 
     file_count, chunks = build_chunks(
         settings.runbooks_dir,

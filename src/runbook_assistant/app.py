@@ -2,8 +2,9 @@
 
 Run: uv run streamlit run src/runbook_assistant/app.py
 
-UI only: answering, trace links, feedback and index checks live in
-service.py; this file decides what to show and where.
+UI only: answering, trace links, feedback, index checks, secret masking
+and rate limits live in service.py / guardrails/; this file decides what to
+show and where.
 
 How Streamlit runs this file:
 - Rerun model: the whole script runs top to bottom on every interaction
@@ -28,9 +29,11 @@ from pydantic import ValidationError
 
 from runbook_assistant import service
 from runbook_assistant.config import Settings, configure_tracing, get_settings
+from runbook_assistant.guardrails.input import too_long
+from runbook_assistant.guardrails.rate_limit import client_ip
 from runbook_assistant.rag import NO_ANSWER
 from runbook_assistant.retriever import RunbookInfo
-from runbook_assistant.service import AnswerResult, IndexStatus
+from runbook_assistant.service import AnswerResult, IndexStatus, SharedLimits
 
 logging.basicConfig(
     level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -54,6 +57,13 @@ Message = dict[str, Any]
 def load_setup(setup: str) -> object:
     """Build the chain or graph once per setup, shared by every rerun and user."""
     return service.load_setup(setup)
+
+
+@st.cache_resource
+def shared_limits() -> SharedLimits:
+    """One per-IP limiter and one daily cap for the whole app process: every
+    session and user shares them (cache_resource returns the same object)."""
+    return service.new_shared_limits(get_settings())
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -97,11 +107,30 @@ def render_sidebar(settings: Settings, runbooks: list[RunbookInfo]) -> str:
 
 
 def render_answer(result: AnswerResult) -> None:
-    if result["is_refusal"]:
+    blocked_by = [
+        e["guardrail"] for e in result["guardrail_events"] if e["action"] == "blocked"
+    ]
+    if blocked_by:
+        st.warning(result["answer"], icon=":material/block:")
+        st.caption(
+            f"Stopped by the {blocked_by[0]} guardrail: nothing was searched "
+            "or generated."
+        )
+    elif result["is_refusal"]:
         st.warning(result["answer"], icon=":material/search_off:")
         st.caption("None of the runbooks cover this question, so nothing was made up.")
     else:
-        st.markdown(result["answer"])
+        st.markdown(result["answer_body"])
+
+    if result["command_warnings"]:
+        st.warning(
+            "**Risky commands in this answer.** Check the impact before running:\n"
+            + "\n".join(
+                f"- **{w.name}** ({w.severity}): {w.warning}"
+                for w in result["command_warnings"]
+            ),
+            icon=":material/warning:",
+        )
 
 
 def render_chunk(doc: Document) -> None:
@@ -144,6 +173,17 @@ def render_behind_the_scenes(result: AnswerResult) -> None:
                     for doc in result["filtered_out"]
                 )
             )
+        if result["guardrail_events"]:
+            st.markdown("**Guardrails triggered**")
+            st.markdown(
+                "\n".join(
+                    f"- **{e['guardrail']}** {e['action']}"
+                    + (f": {e['detail']}" if e["detail"] else "")
+                    for e in result["guardrail_events"]
+                )
+            )
+        else:
+            st.markdown("**Guardrails triggered:** none")
         if result["trace_url"]:
             st.link_button(
                 "Open trace in LangSmith",
@@ -192,6 +232,11 @@ def render_message(message: Message, tracing_on: bool) -> None:
     with st.chat_message(message["role"]):
         if message["role"] == "user":
             st.markdown(message["content"])
+            if message.get("masked"):
+                st.caption(
+                    f":material/lock: Masked before sending: {message['masked']}. "
+                    "Never paste real secrets into a chat."
+                )
         elif message.get("error"):
             st.error(message["error"], icon=":material/error:")
         else:
@@ -209,9 +254,28 @@ def assistant_message(**fields: Any) -> Message:
     return {"role": "assistant", "id": uuid4().hex, "feedback_sent": False, **fields}
 
 
+def rate_limit_message(settings: Settings) -> str | None:
+    """Session limit (state in st.session_state, so it ends with the session),
+    plus the per-IP and daily limits shared by all sessions."""
+    if "rate_limiter" not in st.session_state:
+        st.session_state.rate_limiter = service.new_session_limiter(settings)
+    ip = client_ip(
+        st.context.ip_address,
+        st.context.headers,
+        settings.rate_limit_trust_forwarded_for,
+    )
+    return service.check_rate_limits(
+        st.session_state.rate_limiter, shared_limits(), ip, settings
+    )
+
+
 def answer_question(question: str, setup: str, settings: Settings) -> Message:
-    """Validate, answer, and turn any failure into a friendly message."""
-    if len(question) > settings.max_question_chars:
+    """Validate, rate-limit, answer, and turn any failure into a friendly message.
+
+    The length check comes first so an over-long question isn't counted
+    against the rate limits.
+    """
+    if too_long(question, settings):
         return assistant_message(
             error=(
                 f"That question is {len(question)} characters long. Please keep it "
@@ -219,6 +283,8 @@ def answer_question(question: str, setup: str, settings: Settings) -> Message:
                 "and the system involved."
             )
         )
+    if limited := rate_limit_message(settings):
+        return assistant_message(error=limited)
     try:
         with st.spinner("Searching the runbooks..."):
             return assistant_message(result=service.answer(question, setup))
@@ -281,7 +347,10 @@ def main() -> None:
     question = st.chat_input("Describe the problem, e.g. IIS app pool keeps stopping")
     if question and question.strip():
         question = question.strip()
-        user = {"role": "user", "content": question}
+        # Only the masked text is shown and stored; the raw question goes
+        # straight to service.answer, which masks it again before invoke.
+        shown, masked = service.mask_for_display(question)
+        user = {"role": "user", "content": shown, "masked": masked}
         st.session_state.messages.append(user)
         render_message(user, tracing_on)
 

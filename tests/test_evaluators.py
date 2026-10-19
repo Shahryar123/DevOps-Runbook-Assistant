@@ -6,11 +6,14 @@ import pytest
 
 from evals import evaluators
 from evals.evaluators import (
+    blocked_correctly,
     correct_refusal,
     correctness,
     groundedness,
     is_refusal,
     retrieval_hit,
+    secret_masked,
+    warning_present,
 )
 from evals.run_evals import TracerNoiseFilter
 from evals.upload_dataset import example_id, load_cases
@@ -140,6 +143,62 @@ def test_failed_runs_are_skipped_not_scored(
         assert "failed" in res["comment"]
 
 
+# --- Guardrail evaluators ------------------------------------------------------------
+
+SECRET_CASE = {**IN_SCOPE, "secret": "FakePass2026!"}
+
+
+def test_secret_masked() -> None:
+    clean = {**outputs(), "question_sent": "Password=[MASKED_SECRET]"}
+    leaked = {**outputs("Use FakePass2026!"), "question_sent": "x"}
+    assert secret_masked(clean, SECRET_CASE)["score"] == 1.0
+    res = secret_masked(leaked, SECRET_CASE)
+    assert res["score"] == 0.0
+    assert "answer" in res["comment"]
+    assert "FakePass2026!" not in res["comment"]  # never echo the secret
+    assert secret_masked(clean, IN_SCOPE)["score"] is None
+
+
+def test_warning_present() -> None:
+    expect = {**IN_SCOPE, "expect_warning": True}
+    assert (
+        warning_present({**outputs(), "command_warnings": ["iisreset"]}, expect)[
+            "score"
+        ]
+        == 1.0
+    )
+    assert (
+        warning_present({**outputs(), "command_warnings": []}, expect)["score"] == 0.0
+    )
+    assert warning_present(outputs(), IN_SCOPE)["score"] is None
+
+
+@pytest.mark.parametrize(
+    ("blocked", "reference", "expected"),
+    [
+        ("injection", {**OUT_OF_SCOPE, "expect_blocked": "injection"}, 1.0),
+        (None, {**OUT_OF_SCOPE, "expect_blocked": "injection"}, 0.0),
+        ("moderation", {**OUT_OF_SCOPE, "expect_blocked": "injection"}, 0.0),
+        (None, IN_SCOPE, 1.0),  # normal question, not blocked
+        ("off_topic", IN_SCOPE, 0.0),  # false positive
+    ],
+)
+def test_blocked_correctly(
+    blocked: str | None, reference: dict, expected: float
+) -> None:
+    res = blocked_correctly({**outputs(), "blocked": blocked}, reference)
+    assert res["score"] == expected
+
+
+def test_guardrail_evaluators_skip_failed_runs() -> None:
+    for res in (
+        secret_masked(None, SECRET_CASE),
+        warning_present(None, {"expect_warning": True}),
+        blocked_correctly(None, IN_SCOPE),
+    ):
+        assert res["score"] is None
+
+
 # --- Tracer noise filter ------------------------------------------------------------
 
 
@@ -175,12 +234,29 @@ def test_dataset_is_valid_and_points_at_real_runbooks() -> None:
     assert len(cases) >= 20
     for case in cases:
         assert set(case["expected_sources"]) <= runbooks, case["id"]
-        if case["category"] == "out_of_scope":
+        if case["category"] == "out_of_scope" or case.get("expect_blocked"):
             assert case["expected_sources"] == [], case["id"]
+        elif case["category"] == "adversarial":
+            assert len(case["expected_sources"]) >= 1, case["id"]
         elif case["category"] == "multi_runbook":
             assert len(case["expected_sources"]) >= 2, case["id"]
         else:
             assert len(case["expected_sources"]) == 1, case["id"]
+
+
+def test_adversarial_cases_cover_every_guardrail() -> None:
+    defaults = Settings.model_fields
+    cases = load_cases(
+        defaults["eval_dataset_path"].default, defaults["eval_categories"].default
+    )
+    adversarial = [c for c in cases if c["category"] == "adversarial"]
+    assert {c.get("expect_blocked") for c in adversarial} >= {
+        "injection",
+        "moderation",
+        "off_topic",
+    }
+    assert any(c.get("expect_warning") for c in adversarial)
+    assert sum("secret" in c for c in adversarial) >= 2
 
 
 def test_example_ids_are_stable() -> None:

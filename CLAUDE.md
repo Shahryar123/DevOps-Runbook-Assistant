@@ -7,6 +7,7 @@ AWS, Azure, CI/CD) using RAG over runbooks in data/runbooks/.
 
 - Python 3.12, managed with uv (never use pip directly)
 - LangChain (ChatOpenAI, OpenAIEmbeddings) — never call the openai SDK directly
+  (one exception: guardrails/moderation.py, since LangChain has no plain moderation API)
 - LangGraph for the agent flow, Chroma as local vector store
 - LangSmith for tracing and evaluation
 - Streamlit UI
@@ -26,6 +27,8 @@ AWS, Azure, CI/CD) using RAG over runbooks in data/runbooks/.
 - src/runbook_assistant/graph/ — LangGraph state, nodes, graph builder
 - src/runbook_assistant/service.py — UI-facing logic (answer, trace link, feedback)
 - src/runbook_assistant/app.py — Streamlit chat UI (UI only; calls service.py)
+- src/runbook_assistant/guardrails/ — one module per guardrail (secrets, commands,
+  injection, moderation, rate_limit, input); patterns and flags live in config.py
 - evals/ — LangSmith datasets and evaluators
 - data/runbooks/ — markdown runbooks (source documents)
 

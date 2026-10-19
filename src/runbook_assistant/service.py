@@ -1,11 +1,13 @@
 """What the UI needs, as plain Python (no Streamlit): answer a question with
-a chosen setup, link to its trace, send feedback, and check the index.
+a chosen setup, link to its trace, send feedback, check the index, mask
+secrets for display, and apply rate limits.
 
 Keeping this separate from app.py means it can be unit tested, and any other
 frontend (a CLI, a FastAPI + React app) could reuse it unchanged.
 """
 
 import logging
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import Literal, TypedDict
 from uuid import UUID
@@ -13,12 +15,21 @@ from uuid import UUID
 import openai
 from langchain_core.documents import Document
 from langchain_core.runnables import Runnable
-from langsmith import Client
 
 from runbook_assistant.config import Settings, get_settings
 from runbook_assistant.graph.build import GraphOptions, ask_graph, get_graph
+from runbook_assistant.guardrails.commands import CommandWarning
+from runbook_assistant.guardrails.events import GuardrailEvent
+from runbook_assistant.guardrails.rate_limit import (
+    DailyCap,
+    SlidingWindowLimiter,
+    check_limits,
+    limit_message,
+)
+from runbook_assistant.guardrails.secrets import describe, mask_with_event
 from runbook_assistant.rag import ask_with_sources, get_chain, is_refusal
 from runbook_assistant.retriever import RunbookInfo, list_runbooks
+from runbook_assistant.tracing import get_langsmith_client, tracing_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +43,10 @@ IndexStatus = Literal["missing", "empty", "ok"]
 class AnswerResult(TypedDict):
     """One answer plus everything the UI shows about how it was produced."""
 
-    question: str
+    question: str  # as sent to the model: secrets already masked
     setup: str
-    answer: str
+    answer: str  # masked, with any command warnings appended
+    answer_body: str  # the answer without the warnings block
     is_refusal: bool
     topic: str
     search_queries: list[str]
@@ -44,6 +56,9 @@ class AnswerResult(TypedDict):
     run_id: str
     latency_s: float
     trace_url: str | None
+    command_warnings: list[CommandWarning]
+    guardrail_events: list[GuardrailEvent]
+    blocked_reason: str | None
 
 
 def options_for_setup(setup: str, settings: Settings) -> GraphOptions | None:
@@ -67,25 +82,30 @@ def answer(question: str, setup: str) -> AnswerResult:
     if options is None:
         rag = ask_with_sources(question, tags=settings.ui_tags)
         return AnswerResult(
-            question=question,
+            question=rag["question_sent"],
             setup=setup,
             answer=rag["answer"],
+            answer_body=rag["answer"],
             is_refusal=is_refusal(rag["answer"]),
             topic=NO_ROUTING_TOPIC,
-            search_queries=[question],
+            search_queries=[rag["question_sent"]],
             retry_count=0,
             kept=rag["docs"],
             filtered_out=[],
             run_id=str(rag["run_id"]),
             latency_s=rag["latency_s"],
             trace_url=trace_url(str(rag["run_id"])),
+            command_warnings=[],  # the chain baseline has no output guardrails
+            guardrail_events=rag["guardrail_events"],
+            blocked_reason=None,
         )
 
     graph = ask_graph(question, options, tags=settings.ui_tags)
     return AnswerResult(
-        question=question,
+        question=graph["question_sent"],
         setup=setup,
         answer=graph["answer"],
+        answer_body=graph["answer_body"],
         is_refusal=is_refusal(graph["answer"]),
         topic=graph["topic"],
         search_queries=graph["search_queries"],
@@ -95,21 +115,73 @@ def answer(question: str, setup: str) -> AnswerResult:
         run_id=str(graph["run_id"]),
         latency_s=graph["latency_s"],
         trace_url=trace_url(str(graph["run_id"])),
+        command_warnings=graph["command_warnings"],
+        guardrail_events=graph["guardrail_events"],
+        blocked_reason=graph["blocked_reason"],
     )
 
 
+def mask_for_display(question: str) -> tuple[str, str]:
+    """(question as it will be sent, what was masked e.g. "jwt x1" or "").
+
+    The chat history stores only the masked text, never the raw question.
+    """
+    masked, _ = mask_with_event(question, get_settings(), "question")
+    return masked.text, describe(masked.found)
+
+
+# --- Rate limits -------------------------------------------------------------------
+
+
+@dataclass
+class SharedLimits:
+    """Limits shared by every session in this app process."""
+
+    per_ip: SlidingWindowLimiter
+    daily: DailyCap
+
+
+def new_session_limiter(settings: Settings) -> SlidingWindowLimiter:
+    return SlidingWindowLimiter(
+        settings.rate_limit_session_max, settings.rate_limit_window_s
+    )
+
+
+def new_shared_limits(settings: Settings) -> SharedLimits:
+    return SharedLimits(
+        per_ip=SlidingWindowLimiter(
+            settings.rate_limit_ip_max, settings.rate_limit_window_s
+        ),
+        daily=DailyCap(settings.rate_limit_daily_cap),
+    )
+
+
+def check_rate_limits(
+    session: SlidingWindowLimiter, shared: SharedLimits, ip: str, settings: Settings
+) -> str | None:
+    """None if the question may be asked (and it is counted); else a friendly
+    message saying which limit was hit and when to retry."""
+    if not settings.rate_limit_enabled:
+        return None
+    hit = check_limits(
+        [
+            ("session", session, "session"),
+            ("ip", shared.per_ip, ip),
+            ("daily", shared.daily, ""),
+        ]
+    )
+    if hit is None:
+        return None
+    logger.warning("Rate limit hit: scope=%s", hit.scope)  # never log the IP
+    max_requests = {
+        "session": settings.rate_limit_session_max,
+        "ip": settings.rate_limit_ip_max,
+        "daily": settings.rate_limit_daily_cap,
+    }[hit.scope]
+    return limit_message(hit, max_requests, settings.rate_limit_window_s)
+
+
 # --- LangSmith: trace links and feedback ---------------------------------------
-
-
-def tracing_enabled(settings: Settings) -> bool:
-    return settings.langsmith_tracing and settings.langsmith_api_key is not None
-
-
-@lru_cache
-def get_langsmith_client() -> Client:
-    settings = get_settings()
-    assert settings.langsmith_api_key is not None
-    return Client(api_key=settings.langsmith_api_key.get_secret_value())
 
 
 @lru_cache

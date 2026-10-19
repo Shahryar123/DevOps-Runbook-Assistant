@@ -5,6 +5,9 @@ from typing import Annotated, TypedDict
 
 from langchain_core.documents import Document
 
+from runbook_assistant.guardrails.commands import CommandWarning
+from runbook_assistant.guardrails.events import GuardrailEvent
+
 
 class GraphState(TypedDict, total=False):
     """State passed between nodes.
@@ -25,4 +28,11 @@ class GraphState(TypedDict, total=False):
     relevant_documents: list[Document]  # chunks the grader marked relevant
     # Every chunk the grader rejected, across all attempts (also a reducer).
     filtered_documents: Annotated[list[Document], operator.add]
-    answer: str
+    answer: str  # final answer: masked, with any command warnings appended
+    answer_body: str  # the answer without the warnings block (the UI shows those apart)
+
+    # Guardrails
+    # What triggered, across all nodes (a reducer). Never contains secret values.
+    guardrail_events: Annotated[list[GuardrailEvent], operator.add]
+    blocked_reason: str | None  # set by input_guardrails, e.g. "injection"
+    command_warnings: list[CommandWarning]  # risky commands found in the answer

@@ -1,5 +1,6 @@
-"""Graph nodes: route_question, retrieve, grade_documents, rewrite_query,
-generate, no_answer.
+"""Graph nodes: input_guardrails, blocked_reply, route_question,
+off_topic_reply, retrieve, grade_documents, rewrite_query, generate,
+no_answer, output_guardrails.
 
 A node is a plain function: (state) -> partial state update (dict).
 """
@@ -16,6 +17,14 @@ from pydantic import BaseModel, Field, create_model
 
 from runbook_assistant.config import get_settings
 from runbook_assistant.graph.state import GraphState
+from runbook_assistant.guardrails.commands import (
+    find_dangerous_commands,
+    format_warnings,
+)
+from runbook_assistant.guardrails.events import guardrail_event
+from runbook_assistant.guardrails.input import run_input_guardrails
+from runbook_assistant.guardrails.replies import BLOCKED_REPLIES, OFF_TOPIC_REPLY
+from runbook_assistant.guardrails.secrets import mask_with_event
 from runbook_assistant.rag import NO_ANSWER, PROMPT, format_docs
 from runbook_assistant.retriever import get_retriever
 
@@ -26,10 +35,15 @@ most likely to contain the answer.
 
 Topics:
 {topics}
-- {general_topic}: the question does not clearly fit one topic above, spans several,
-  or is not about DevOps.
+- {general_topic}: an IT/DevOps question that does not clearly fit one topic above,
+  or spans several.{off_topic}
 
 Pick exactly one topic."""
+
+OFF_TOPIC_LINE = """
+- {name}: the question is not about IT, servers, software or DevOps at all
+  (e.g. food, sports, travel, personal advice). Any IT question, even one no
+  runbook covers (e.g. Kubernetes, Oracle), is NOT {name}."""
 
 ROUTER_PROMPT = ChatPromptTemplate.from_messages(
     [("system", ROUTER_SYSTEM_PROMPT), ("human", "{question}")]
@@ -60,7 +74,14 @@ def get_router() -> Runnable:
         for name, description in settings.runbook_topics.items()
     )
     llm = ChatOpenAI(model=settings.router_model, api_key=settings.openai_api_key)
-    prompt = ROUTER_PROMPT.partial(topics=topics, general_topic=settings.general_topic)
+    off_topic = (
+        OFF_TOPIC_LINE.format(name=settings.off_topic_topic)
+        if settings.off_topic_enabled
+        else ""
+    )
+    prompt = ROUTER_PROMPT.partial(
+        topics=topics, general_topic=settings.general_topic, off_topic=off_topic
+    )
     return prompt | llm.with_structured_output(make_route_model(settings.router_topics))
 
 
@@ -139,6 +160,23 @@ def get_generator() -> Runnable:
 
 
 # --- Nodes ------------------------------------------------------------------
+
+
+def input_guardrails(state: GraphState) -> GraphState:
+    """Length -> moderation -> injection checks on the (already masked) question."""
+    check = run_input_guardrails(state["question"], get_settings())
+    return {"blocked_reason": check.blocked_reason, "guardrail_events": check.events}
+
+
+def blocked_reply(state: GraphState) -> GraphState:
+    """Fixed reply for a blocked question: no retrieval, no generation."""
+    return {"answer": BLOCKED_REPLIES[state["blocked_reason"]]}
+
+
+def off_topic_reply(state: GraphState) -> GraphState:
+    """Fixed reply when the router says the question isn't about IT at all."""
+    event = guardrail_event("off_topic", "blocked", "router chose off_topic")
+    return {"answer": OFF_TOPIC_REPLY, "guardrail_events": [event]}
 
 
 def route_question(state: GraphState, enabled: bool = True) -> GraphState:
@@ -226,3 +264,27 @@ def generate(state: GraphState) -> GraphState:
 def no_answer(state: GraphState) -> GraphState:
     """Fixed reply with no LLM call: costs nothing and cannot hallucinate."""
     return {"answer": NO_ANSWER}
+
+
+def output_guardrails(state: GraphState) -> GraphState:
+    """Mask any secret in the generated answer, then warn about risky commands.
+
+    Masking runs first so a warning can never quote a secret. The warnings are
+    appended to `answer`; `answer_body` keeps the answer without them.
+    """
+    settings = get_settings()
+    masked, events = mask_with_event(state["answer"], settings, "answer")
+    warnings = (
+        find_dangerous_commands(masked.text, settings.dangerous_commands)
+        if settings.command_warnings_enabled
+        else []
+    )
+    if warnings:
+        names = ", ".join(w.name for w in warnings)
+        events.append(guardrail_event("commands", "warned", names))
+    return {
+        "answer": masked.text + format_warnings(warnings),
+        "answer_body": masked.text,
+        "command_warnings": warnings,
+        "guardrail_events": events,
+    }
