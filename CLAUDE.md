@@ -21,6 +21,8 @@ AWS, Azure, CI/CD) using RAG over runbooks in data/runbooks/.
   - `--validate-only` validate runbooks only, exit 0/1 (for CI)
   - `--full` force a full rebuild
   - Stop the Streamlit app before ingesting, then restart it (local Chroma is single-process)
+- Docker (local): `docker compose build`, `docker compose run --rm ingest`, `docker compose up app`
+  (one image: app by default, ingest with `python -m runbook_assistant.ingest`)
 - Test: `uv run pytest`
 - Lint: `uv run ruff check . --fix && uv run ruff format .`
 
@@ -29,6 +31,9 @@ AWS, Azure, CI/CD) using RAG over runbooks in data/runbooks/.
 - src/runbook_assistant/config.py — settings loaded via pydantic-settings
 - src/runbook_assistant/ingest.py — ingest CLI (flags, exit codes)
 - src/runbook_assistant/pipeline/ — sources, chunking, validation, manifest, sync, report, lock
+- src/runbook_assistant/vectorstores/ — VectorIndex interface; Chroma and Azure AI Search
+  adapters; factory picks one from VECTOR_STORE
+- Dockerfile, docker-compose.yml — container image and local compose setup
 - src/runbook_assistant/graph/ — LangGraph state, nodes, graph builder
 - src/runbook_assistant/service.py — UI-facing logic (answer, trace link, feedback)
 - src/runbook_assistant/app.py — Streamlit chat UI (UI only; calls service.py)
@@ -36,6 +41,14 @@ AWS, Azure, CI/CD) using RAG over runbooks in data/runbooks/.
   injection, moderation, rate_limit, input); patterns and flags live in config.py
 - evals/ — LangSmith datasets and evaluators
 - data/runbooks/ — markdown runbooks (source documents)
+
+## Key settings (environment variables; see config.py)
+
+- VECTOR_STORE = chroma (default, local folder) | azure_search
+- RETRIEVAL_MODE = vector (default) | hybrid (keyword + vector; azure_search only)
+- AZURE_SEARCH_ENDPOINT, AZURE_SEARCH_INDEX_NAME; AZURE_SEARCH_API_KEY optional
+  (without it: DefaultAzureCredential / Managed Identity)
+- Config must work from environment variables alone (no .env in containers)
 
 ## Rules
 

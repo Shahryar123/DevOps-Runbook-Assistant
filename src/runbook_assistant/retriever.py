@@ -1,13 +1,12 @@
-"""Embeddings, the Chroma vector store, and the retriever built on top of it."""
+"""Embeddings, and the retriever built on top of the vector index."""
 
-import threading
 from typing import NamedTuple
 
-from langchain_chroma import Chroma
-from langchain_core.vectorstores import VectorStoreRetriever
+from langchain_core.retrievers import BaseRetriever
 from langchain_openai import OpenAIEmbeddings
 
 from runbook_assistant.config import get_settings
+from runbook_assistant.vectorstores.factory import get_vector_index
 
 
 def get_embeddings() -> OpenAIEmbeddings:
@@ -22,33 +21,6 @@ def get_embeddings() -> OpenAIEmbeddings:
     )
 
 
-_vector_store: Chroma | None = None
-_vector_store_lock = threading.Lock()
-
-
-def get_vector_store() -> Chroma:
-    """Open (or create) the persistent Chroma collection, once per process.
-
-    A vector store saves (text, metadata, vector) triples and answers
-    "which stored texts are closest to this vector?".
-
-    Creating a local Chroma client is not thread-safe: evaluations run
-    several questions in parallel threads, and concurrent creation crashes
-    inside chromadb. So the store is created once, under a lock, and reused.
-    Searching a shared store from several threads is fine.
-    """
-    global _vector_store
-    with _vector_store_lock:
-        if _vector_store is None:
-            settings = get_settings()
-            _vector_store = Chroma(
-                collection_name=settings.chroma_collection,
-                embedding_function=get_embeddings(),
-                persist_directory=str(settings.chroma_dir),
-            )
-        return _vector_store
-
-
 class RunbookInfo(NamedTuple):
     title: str
     source: str
@@ -56,19 +28,18 @@ class RunbookInfo(NamedTuple):
 
 
 def list_runbooks() -> list[RunbookInfo]:
-    """The runbooks currently in the vector store, one entry per file.
+    """The runbooks currently in the vector index, one entry per file.
 
     Reads only chunk metadata (no embeddings, no OpenAI call) and keeps one
     entry per source file. An empty list means nothing has been ingested.
     """
-    metadatas = get_vector_store().get(include=["metadatas"])["metadatas"]
     unique = {
         meta["source"]: RunbookInfo(
             title=str(meta.get("title", meta["source"])),
             source=str(meta["source"]),
             topic=str(meta.get("topic", "")),
         )
-        for meta in metadatas
+        for meta in get_vector_index().list_metadata()
         if meta and "source" in meta
     }
     return sorted(unique.values(), key=lambda info: info.title.lower())
@@ -76,17 +47,18 @@ def list_runbooks() -> list[RunbookInfo]:
 
 def get_retriever(
     k: int | None = None, metadata_filter: dict[str, str] | None = None
-) -> VectorStoreRetriever:
+) -> BaseRetriever:
     """Return a retriever that fetches the top-k most similar chunks.
 
     A retriever is a Runnable: .invoke("question") -> list[Document].
-    It hides how documents are found, so it can be swapped later
-    (e.g. hybrid search) without changing the chain.
+    It hides how documents are found, so the store (Chroma or Azure AI
+    Search) and the mode (vector or hybrid) can change without touching
+    the chain or graph.
 
-    `metadata_filter` is a Chroma filter, e.g. {"topic": "networking"}:
+    `metadata_filter` is an exact-match filter, e.g. {"topic": "networking"}:
     only chunks whose metadata matches are considered in the search.
     """
-    search_kwargs: dict = {"k": k if k is not None else get_settings().retriever_k}
-    if metadata_filter:
-        search_kwargs["filter"] = metadata_filter
-    return get_vector_store().as_retriever(search_kwargs=search_kwargs)
+    return get_vector_index().as_retriever(
+        k=k if k is not None else get_settings().retriever_k,
+        metadata_filter=metadata_filter,
+    )

@@ -25,10 +25,14 @@ from uuid import uuid4
 
 import streamlit as st
 from langchain_core.documents import Document
-from pydantic import ValidationError
 
 from runbook_assistant import service
-from runbook_assistant.config import Settings, configure_tracing, get_settings
+from runbook_assistant.config import (
+    ConfigError,
+    Settings,
+    configure_tracing,
+    get_settings,
+)
 from runbook_assistant.guardrails.input import too_long
 from runbook_assistant.guardrails.rate_limit import client_ip
 from runbook_assistant.rag import NO_ANSWER
@@ -314,11 +318,10 @@ def main() -> None:
     )
     try:
         settings = get_settings()
-    except ValidationError:
-        st.error(
-            "Settings could not be loaded. Check that `.env` exists and sets "
-            "OPENAI_API_KEY (see `.env.example`)."
-        )
+    except ConfigError as exc:
+        # One message listing every missing/invalid setting (see config.py).
+        st.error("The app is not configured correctly.")
+        st.code(str(exc), language="text")
         st.stop()
     configure_tracing(settings)
 

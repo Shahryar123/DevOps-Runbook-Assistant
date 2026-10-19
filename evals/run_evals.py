@@ -97,6 +97,8 @@ def experiment_metadata(
         "grading_enabled": bool(options and options.grading_enabled),
         "max_retries": options.max_retries if options else 0,
         "dataset": settings.eval_dataset_name,
+        "vector_store": settings.vector_store,
+        "retrieval_mode": settings.retrieval_mode,
         # The chain only has secret masking; the graph has every guardrail.
         **{flag: getattr(settings, flag) for flag in GUARDRAIL_FLAGS},
     }

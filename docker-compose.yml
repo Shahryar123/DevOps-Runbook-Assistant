@@ -1,0 +1,43 @@
+# Local development only (Azure uses Container Apps, Phase B).
+#
+#   docker compose build                  # build the image
+#   docker compose run --rm ingest        # load runbooks into the Chroma volume
+#   docker compose up app                 # start the app on http://localhost:8501
+#   docker compose down                   # stop (the volume and its data stay)
+#
+# Re-run ingest after changing runbooks; stop the app first (local Chroma is
+# single-process), then start it again.
+
+name: runbook-assistant
+
+services:
+  app:
+    build: .
+    image: runbook-assistant:local
+    ports:
+      - "8501:8501"
+    env_file: .env # OPENAI_API_KEY, LANGSMITH_*, ...; never baked into the image
+    volumes:
+      - chroma-data:/app/chroma_db # the index survives container restarts
+    restart: unless-stopped
+
+  ingest:
+    # Same image as the app, different command: exactly what the Azure
+    # Container Apps Job will do.
+    build: .
+    image: runbook-assistant:local
+    command: ["python", "-m", "runbook_assistant.ingest"]
+    env_file: .env
+    volumes:
+      - chroma-data:/app/chroma_db
+      # Use the runbooks from your working copy, so edits don't need a rebuild.
+      - ./data/runbooks:/app/data/runbooks:ro
+    # Profile: not started by `docker compose up`, only when asked for
+    # (`docker compose run --rm ingest`).
+    profiles: ["ingest"]
+    healthcheck:
+      disable: true # no web server in this container
+    restart: "no"
+
+volumes:
+  chroma-data: # named volume managed by Docker

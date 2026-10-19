@@ -22,7 +22,6 @@ manifest still match exactly.
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
-from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 
@@ -38,10 +37,13 @@ from runbook_assistant.pipeline.manifest import (
     content_hash,
     fingerprint,
     fingerprint_changes,
+    fingerprint_json,
 )
 from runbook_assistant.pipeline.sources import SourceDocument
+from runbook_assistant.vectorstores.base import VectorIndex
 
-StoreFactory = Callable[[Embeddings], Chroma]
+# Opens the vector index with the given embeddings (Chroma or Azure AI Search).
+IndexFactory = Callable[[Embeddings], VectorIndex]
 
 
 @dataclass
@@ -107,8 +109,10 @@ def rebuild_reason(
 def prepare_chunks(
     doc: SourceDocument, settings: Settings, ingested_at: str
 ) -> FileChunks:
-    """Chunk one runbook and add content_hash / ingested_at to every chunk."""
+    """Chunk one runbook and add content_hash / ingested_at / index_fingerprint
+    to every chunk (the last lets the manifest be rebuilt from the index)."""
     digest = content_hash(doc.content)
+    index_fingerprint = fingerprint_json(settings)
     parsed = parse_frontmatter(
         Document(page_content=doc.content, metadata={"source": doc.source_id}),
         settings.runbook_topics,
@@ -120,6 +124,7 @@ def prepare_chunks(
                 **chunk.metadata,
                 "content_hash": digest,
                 "ingested_at": ingested_at,
+                "index_fingerprint": index_fingerprint,
             },
         )
         for chunk in split_runbook(parsed, settings.chunk_size, settings.chunk_overlap)
@@ -189,7 +194,7 @@ class CachingEmbeddings(Embeddings):
 
 def apply_plan(
     plan: SyncPlan,
-    store: Chroma,
+    index: VectorIndex,
     manifest: Manifest,
     ingested_at: str,
     result: SyncResult,
@@ -197,25 +202,25 @@ def apply_plan(
     """Write the (already embedded) plan to Chroma, updating `manifest` after
     every step so it always describes what is really in the index."""
     if plan.full_rebuild:
-        result.chunks_removed += len(store.get(include=[])["ids"])
-        store.reset_collection()
+        result.chunks_removed += index.count()
+        index.reset()
         manifest.files.clear()
 
     for source in plan.deleted:
         record = manifest.files.get(source)
         if record and record.chunk_ids:
-            store.delete(ids=record.chunk_ids)
+            index.delete(record.chunk_ids)
             result.chunks_removed += len(record.chunk_ids)
         manifest.files.pop(source, None)
 
     for fc in plan.to_embed:
         if fc.chunks:
-            store.add_documents(fc.chunks, ids=fc.ids)  # upsert; vectors from cache
+            index.add_documents(fc.chunks, fc.ids)  # upsert; vectors from cache
             result.chunks_added += len(fc.chunks)
         old = manifest.files.get(fc.source)
         stale = sorted(set(old.chunk_ids) - set(fc.ids)) if old else []
         if stale:
-            store.delete(ids=stale)
+            index.delete(stale)
             result.chunks_removed += len(stale)
         manifest.files[fc.source] = FileRecord(
             content_hash=fc.content_hash,

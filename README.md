@@ -22,6 +22,21 @@ uv sync                                 # install dependencies
 uv run python scripts/check_setup.py    # check that your keys work
 ```
 
+## Run with Docker
+
+The app and the ingest job use the same image. Settings come from your `.env` file (passed in at run time, never copied into the image).
+
+```powershell
+docker compose build                   # build the image
+docker compose run --rm ingest         # load the runbooks into the search database (a Docker volume)
+docker compose up app                  # start the app: http://localhost:8501
+docker compose down                    # stop it (the search database is kept)
+```
+
+After changing runbooks: stop the app, run the ingest again, then start the app.
+
+By default the search database is a local Chroma folder. To use Azure AI Search instead, set `VECTOR_STORE=azure_search`, `AZURE_SEARCH_ENDPOINT` and `AZURE_SEARCH_INDEX_NAME` (and `AZURE_SEARCH_API_KEY` for local testing).
+
 ## Folders
 
 | Folder | What's inside |
@@ -43,6 +58,7 @@ uv run python scripts/check_setup.py    # check that your keys work
 - [x] 6. [Streamlit chat UI](docs/milestones/06-streamlit-ui.md)
 - [x] 7. [Guardrails](docs/milestones/07-guardrails.md)
 - [x] 8. [Ingest data pipeline](docs/milestones/08-data-pipeline.md)
+- [x] 9. [Containers and switchable vector store](docs/milestones/09-containers.md)
 
 ## Try it
 

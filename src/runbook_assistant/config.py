@@ -1,11 +1,17 @@
-"""Application settings loaded from environment variables and the project .env file."""
+"""Application settings loaded from environment variables and the project .env file.
+
+12-factor config: every field below can be set by an environment variable of
+the same name in upper case (lists and dicts as JSON). The .env file is only
+a local-development convenience; in a container there is none, and the
+process environment is the single source of configuration.
+"""
 
 import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # config.py lives in src/runbook_assistant/, so the project root is two levels up.
@@ -169,7 +175,9 @@ class Settings(BaseSettings):
     )
 
     # Secrets: SecretStr hides the value in repr/str/logs.
-    openai_api_key: SecretStr
+    # Required, but checked in check_required() so that every missing setting
+    # is reported in one error instead of one at a time.
+    openai_api_key: SecretStr | None = None
 
     # LangSmith tracing
     langsmith_tracing: bool = False
@@ -190,6 +198,20 @@ class Settings(BaseSettings):
     runbooks_dir: Path = PROJECT_ROOT / "data" / "runbooks"
     chroma_dir: Path = PROJECT_ROOT / "chroma_db"
     chroma_collection: str = "runbooks"
+
+    # Vector store: where chunks live. Everything else uses the
+    # vectorstores.VectorIndex interface and doesn't care which one it is.
+    vector_store: Literal["chroma", "azure_search"] = "chroma"
+    # "hybrid" = keyword (BM25) + vector search, merged. Azure AI Search only.
+    retrieval_mode: Literal["vector", "hybrid"] = "vector"
+    azure_search_endpoint: str | None = None  # https://<name>.search.windows.net
+    azure_search_index_name: str | None = None
+    # Optional: for local testing. Without it, DefaultAzureCredential is used
+    # (Managed Identity in Azure, `az login` locally). Never put it in code.
+    azure_search_api_key: SecretStr | None = None
+    # Vector size of embedding_model (text-embedding-3-small: 1536). Given up
+    # front so opening the Azure index doesn't need an embedding call.
+    embedding_dimensions: int = 1536
 
     # Ingest / retrieval
     chunk_size: int = 800
@@ -298,11 +320,63 @@ class Settings(BaseSettings):
         extra = (self.off_topic_topic,) if self.off_topic_enabled else ()
         return (*self.runbook_topics, self.general_topic, *extra)
 
+    @model_validator(mode="after")
+    def check_required(self) -> "Settings":
+        """Collect EVERY missing or conflicting setting into one error."""
+        missing: list[str] = []
+        if self.openai_api_key is None:
+            missing.append("OPENAI_API_KEY")
+        if self.vector_store == "azure_search":
+            for name in ("azure_search_endpoint", "azure_search_index_name"):
+                if not getattr(self, name):
+                    missing.append(
+                        f"{name.upper()} (needed when VECTOR_STORE=azure_search)"
+                    )
+        if self.langsmith_tracing and self.langsmith_api_key is None:
+            missing.append("LANGSMITH_API_KEY (needed when LANGSMITH_TRACING=true)")
+
+        problems = []
+        if missing:
+            problems.append("missing required settings: " + ", ".join(missing))
+        if self.retrieval_mode == "hybrid" and self.vector_store != "azure_search":
+            problems.append(
+                "RETRIEVAL_MODE=hybrid needs VECTOR_STORE=azure_search "
+                "(Chroma only supports vector search)"
+            )
+        if problems:
+            raise ValueError("; ".join(problems))
+        return self
+
+
+class ConfigError(RuntimeError):
+    """Settings are missing or invalid. The message lists every problem."""
+
+
+def format_config_error(exc: ValidationError) -> str:
+    lines = []
+    for error in exc.errors():
+        field = ".".join(str(part) for part in error["loc"]).upper()
+        message = str(error["msg"]).removeprefix("Value error, ")
+        lines.append(f"{field}: {message}" if field else message)
+    return (
+        "Invalid configuration:\n  - "
+        + "\n  - ".join(lines)
+        + "\nSet these as environment variables (or in .env for local development)."
+    )
+
+
+def load_settings(**overrides: object) -> Settings:
+    """Build Settings, turning pydantic's error into one readable ConfigError."""
+    try:
+        return Settings(**overrides)
+    except ValidationError as exc:
+        raise ConfigError(format_config_error(exc)) from None
+
 
 @lru_cache
 def get_settings() -> Settings:
-    """Return a single cached Settings instance."""
-    return Settings()
+    """Return a single cached Settings instance (raises ConfigError if invalid)."""
+    return load_settings()
 
 
 def configure_tracing(settings: Settings) -> None:

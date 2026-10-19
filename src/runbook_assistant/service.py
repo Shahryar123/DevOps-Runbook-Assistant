@@ -30,6 +30,7 @@ from runbook_assistant.guardrails.secrets import describe, mask_with_event
 from runbook_assistant.rag import ask_with_sources, get_chain, is_refusal
 from runbook_assistant.retriever import RunbookInfo, list_runbooks
 from runbook_assistant.tracing import get_langsmith_client, tracing_enabled
+from runbook_assistant.vectorstores.factory import index_exists
 
 logger = logging.getLogger(__name__)
 
@@ -229,12 +230,12 @@ def send_feedback(run_id: str, score: int, comment: str = "") -> None:
 
 
 def runbook_index(settings: Settings) -> tuple[IndexStatus, list[RunbookInfo]]:
-    """Has ingest been run, and which runbooks are in the store?
+    """Has ingest been run, and which runbooks are in the index?
 
-    Checks the folder before opening Chroma, because opening a missing folder
-    would silently create an empty database.
+    Checks that the index exists before opening it, because opening a missing
+    Chroma folder (or Azure index) would silently create an empty one.
     """
-    if not settings.chroma_dir.exists():
+    if not index_exists(settings):
         return "missing", []
     runbooks = list_runbooks()
     return ("ok" if runbooks else "empty"), runbooks

@@ -29,12 +29,13 @@ from runbook_assistant.pipeline.run import (
     EXIT_LOCKED,
     EXIT_OK,
     EXIT_VALIDATION,
-    NoEmbeddings,
     PipelineOptions,
     run_pipeline,
 )
 from runbook_assistant.pipeline.sources import LocalFolderSource, SourceDocument
 from runbook_assistant.pipeline.validation import validate
+from runbook_assistant.vectorstores.base import NoEmbeddings
+from runbook_assistant.vectorstores.chroma import ChromaIndex
 
 # --- Fixtures and helpers -----------------------------------------------------------
 
@@ -123,11 +124,7 @@ class Env:
             self.settings,
             source=LocalFolderSource(self.runbooks),
             embeddings_factory=lambda: self.embeddings,
-            store_factory=lambda emb: Chroma(
-                collection_name=self.settings.chroma_collection,
-                embedding_function=emb,
-                persist_directory=str(self.settings.chroma_dir),
-            ),
+            index_factory=lambda emb: ChromaIndex(self.settings, emb),
             count_tokens=lambda texts: (sum(len(t) for t in texts) // 4, True),
             options=PipelineOptions(**options),
         )

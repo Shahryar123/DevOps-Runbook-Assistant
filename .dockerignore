@@ -1,0 +1,38 @@
+# Files Docker never sends to the build (smaller, faster builds; no secrets).
+
+# Secrets and local config: configuration comes from environment variables
+.env
+.env.*
+
+# Local environment, data and caches
+.venv/
+chroma_db/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Version control, editors, assistants
+.git/
+.gitignore
+.github/
+.vscode/
+.idea/
+.claude/
+
+# Not needed at run time (tests, evals, docs, helper scripts)
+tests/
+evals/
+docs/
+scripts/
+site/
+dist/
+build/
+
+# Docker files themselves
+Dockerfile
+.dockerignore
+docker-compose.yml
