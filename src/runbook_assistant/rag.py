@@ -1,7 +1,10 @@
 """Basic RAG: retriever -> prompt -> ChatOpenAI -> string, built with LCEL."""
 
+import re
+import time
 from functools import lru_cache
 from typing import TypedDict
+from uuid import UUID, uuid4
 
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
@@ -34,6 +37,20 @@ PROMPT = ChatPromptTemplate.from_messages(
 class RagResult(TypedDict):
     answer: str
     docs: list[Document]
+    run_id: UUID
+    latency_s: float
+
+
+def normalize(text: str) -> str:
+    """Lowercase, unify apostrophes, drop punctuation, collapse whitespace."""
+    text = text.lower().replace("’", "'")
+    text = re.sub(r"[^a-z0-9' ]+", " ", text)
+    return " ".join(text.split())
+
+
+def is_refusal(answer: str) -> bool:
+    """True if the answer is the fixed "I don't have a runbook for this" reply."""
+    return normalize(answer).startswith(normalize(NO_ANSWER))
 
 
 def format_docs(docs: list[Document]) -> str:
@@ -71,10 +88,31 @@ def get_chain() -> Runnable:
     return retrieve | RunnablePassthrough.assign(answer=generate)
 
 
-def ask_with_sources(question: str) -> RagResult:
-    """Answer a question and also return the chunks retrieval found."""
-    result = get_chain().invoke(question)
-    return RagResult(answer=result["answer"], docs=result["docs"])
+def ask_with_sources(
+    question: str, run_id: UUID | None = None, tags: list[str] | None = None
+) -> RagResult:
+    """Answer a question and also return the chunks retrieval found.
+
+    `run_id` becomes the ID of the root run in LangSmith (a new one is made
+    if not given), so callers can link to the trace or attach feedback.
+    """
+    settings = get_settings()
+    run_id = run_id or uuid4()
+    start = time.perf_counter()
+    result = get_chain().invoke(
+        question,
+        config={
+            "run_id": run_id,
+            "run_name": settings.chain_run_name,
+            "tags": tags or [],
+        },
+    )
+    return RagResult(
+        answer=result["answer"],
+        docs=result["docs"],
+        run_id=run_id,
+        latency_s=time.perf_counter() - start,
+    )
 
 
 def ask(question: str) -> str:

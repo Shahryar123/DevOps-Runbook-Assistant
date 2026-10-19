@@ -2,9 +2,11 @@
 route -> retrieve -> grade -> generate | rewrite (loop back to retrieve) | no_answer.
 """
 
+import time
 from dataclasses import dataclass
 from functools import lru_cache, partial
 from typing import Literal, TypedDict
+from uuid import UUID, uuid4
 
 from langchain_core.documents import Document
 from langgraph.graph import END, START, StateGraph
@@ -31,6 +33,8 @@ class GraphResult(TypedDict):
     retry_count: int
     kept: list[Document]
     filtered_out: list[Document]
+    run_id: UUID
+    latency_s: float
 
 
 def decide_next_step(state: GraphState, max_retries: int) -> NextStep:
@@ -123,23 +127,35 @@ def get_graph(options: GraphOptions) -> CompiledStateGraph:
     return build_graph(options)
 
 
-def ask_graph(question: str, options: GraphOptions | None = None) -> GraphResult:
+def ask_graph(
+    question: str,
+    options: GraphOptions | None = None,
+    run_id: UUID | None = None,
+    tags: list[str] | None = None,
+) -> GraphResult:
     """Run the graph and report routing, queries, and grading decisions.
 
     `options` defaults to the flags in config; evals pass explicit options.
+    `run_id` becomes the ID of the root run in LangSmith (a new one is made
+    if not given), so callers can link to the trace or attach feedback.
+    `tags` are added to the configured graph tags.
     """
     settings = get_settings()
     configure_tracing(settings)
     options = options or GraphOptions.from_settings(settings)
+    run_id = run_id or uuid4()
 
+    start = time.perf_counter()
     state = get_graph(options).invoke(
         {"question": question},
         config={
+            "run_id": run_id,
             "run_name": settings.graph_run_name,
-            "tags": settings.graph_tags,
+            "tags": [*settings.graph_tags, *(tags or [])],
             "recursion_limit": recursion_limit(options.max_retries),
         },
     )
+    latency_s = time.perf_counter() - start
     return GraphResult(
         answer=state["answer"],
         topic=state["topic"],
@@ -147,4 +163,6 @@ def ask_graph(question: str, options: GraphOptions | None = None) -> GraphResult
         retry_count=state["retry_count"],
         kept=state.get("relevant_documents", []),
         filtered_out=state.get("filtered_documents", []),
+        run_id=run_id,
+        latency_s=latency_s,
     )

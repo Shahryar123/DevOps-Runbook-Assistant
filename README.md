@@ -38,10 +38,12 @@ uv run python scripts/check_setup.py    # check that your keys work
 - [x] 3. [LangGraph with relevance grading](docs/milestones/03-langgraph-grading.md)
 - [x] 4. [Topic router and query-rewrite loop](docs/milestones/04-router-rewrite.md)
 - [x] 5. [Evaluation with LangSmith](docs/milestones/05-evaluation.md)
+- [x] 6. [Streamlit chat UI](docs/milestones/06-streamlit-ui.md)
 
 ## Try it
 
 ```powershell
 uv run python -m runbook_assistant.ingest                 # load runbooks into the search database
 uv run python scripts/ask.py "IIS app pool keeps stopping" # ask a question
+uv run streamlit run src/runbook_assistant/app.py          # chat in the browser
 ```
