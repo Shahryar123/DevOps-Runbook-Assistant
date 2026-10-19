@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from runbook_assistant.config import Settings
 from runbook_assistant.graph import nodes
 from runbook_assistant.graph.build import (
+    GraphOptions,
     build_graph,
     decide_next_step,
     recursion_limit,
@@ -77,8 +78,18 @@ def fakes(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> dict:
     return calls
 
 
-def run(question: str, max_retries: int) -> dict:
-    return build_graph(max_retries).invoke(
+def run(
+    question: str,
+    max_retries: int,
+    routing_enabled: bool = True,
+    grading_enabled: bool = True,
+) -> dict:
+    options = GraphOptions(
+        routing_enabled=routing_enabled,
+        grading_enabled=grading_enabled,
+        max_retries=max_retries,
+    )
+    return build_graph(options).invoke(
         {"question": question},
         config={"recursion_limit": recursion_limit(max_retries)},
     )
@@ -107,7 +118,7 @@ def test_decide_gives_up_when_no_retries_left() -> None:
 
 
 def test_graph_compiles_with_expected_nodes_and_edges() -> None:
-    drawable = build_graph(max_retries=1).get_graph()
+    drawable = build_graph(GraphOptions()).get_graph()
 
     assert set(drawable.nodes) == {
         "__start__",
@@ -175,6 +186,37 @@ def test_generate_answers_original_question_after_rewrite(
     assert len(state["filtered_documents"]) == 1  # rejected on attempt 1
     assert state["answer"] == "answer to: website dead after new build"
     assert fakes["generator_inputs"][0]["question"] == "website dead after new build"
+
+
+# --- Feature flags -----------------------------------------------------------------
+
+
+def fail(*_: object) -> None:
+    raise AssertionError("this LLM must not be called")
+
+
+def test_routing_disabled_skips_router_and_searches_everything(
+    fakes: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(nodes, "get_router", fail)
+
+    state = run("q", max_retries=0, routing_enabled=False)
+
+    assert state["topic"] == "general"
+    assert fakes["filters"] == [None]
+
+
+def test_grading_disabled_keeps_everything_and_generates(
+    fakes: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(nodes, "get_grader", fail)
+
+    state = run("q", max_retries=1, grading_enabled=False)
+
+    assert len(state["relevant_documents"]) == 1
+    assert state["filtered_documents"] == []
+    assert state["retry_count"] == 0
+    assert state["answer"] == "answer to: q"
 
 
 # --- Nodes ------------------------------------------------------------------------

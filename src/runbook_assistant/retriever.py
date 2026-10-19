@@ -1,5 +1,7 @@
 """Embeddings, the Chroma vector store, and the retriever built on top of it."""
 
+import threading
+
 from langchain_chroma import Chroma
 from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_openai import OpenAIEmbeddings
@@ -19,18 +21,31 @@ def get_embeddings() -> OpenAIEmbeddings:
     )
 
 
+_vector_store: Chroma | None = None
+_vector_store_lock = threading.Lock()
+
+
 def get_vector_store() -> Chroma:
-    """Open (or create) the persistent Chroma collection.
+    """Open (or create) the persistent Chroma collection, once per process.
 
     A vector store saves (text, metadata, vector) triples and answers
     "which stored texts are closest to this vector?".
+
+    Creating a local Chroma client is not thread-safe: evaluations run
+    several questions in parallel threads, and concurrent creation crashes
+    inside chromadb. So the store is created once, under a lock, and reused.
+    Searching a shared store from several threads is fine.
     """
-    settings = get_settings()
-    return Chroma(
-        collection_name=settings.chroma_collection,
-        embedding_function=get_embeddings(),
-        persist_directory=str(settings.chroma_dir),
-    )
+    global _vector_store
+    with _vector_store_lock:
+        if _vector_store is None:
+            settings = get_settings()
+            _vector_store = Chroma(
+                collection_name=settings.chroma_collection,
+                embedding_function=get_embeddings(),
+                persist_directory=str(settings.chroma_dir),
+            )
+        return _vector_store
 
 
 def get_retriever(

@@ -141,12 +141,19 @@ def get_generator() -> Runnable:
 # --- Nodes ------------------------------------------------------------------
 
 
-def route_question(state: GraphState) -> GraphState:
-    """Classify the question into a topic and initialise the search state."""
+def route_question(state: GraphState, enabled: bool = True) -> GraphState:
+    """Classify the question into a topic and initialise the search state.
+
+    With routing disabled, no LLM call is made and the topic is the general
+    fallback, so retrieval searches every topic.
+    """
     question = state["question"]
-    route = get_router().invoke({"question": question})
+    if enabled:
+        topic = get_router().invoke({"question": question}).topic
+    else:
+        topic = get_settings().general_topic
     return {
-        "topic": route.topic,
+        "topic": topic,
         "search_query": question,
         "search_queries": [question],
         "retry_count": 0,
@@ -175,9 +182,14 @@ def retrieve(state: GraphState) -> GraphState:
     return {"documents": retriever.invoke(state["search_query"])}
 
 
-def grade_documents(state: GraphState) -> GraphState:
-    """Grade every chunk against the ORIGINAL question in one .batch() call."""
+def grade_documents(state: GraphState, enabled: bool = True) -> GraphState:
+    """Grade every chunk against the ORIGINAL question in one .batch() call.
+
+    With grading disabled, every retrieved chunk is kept and no LLM call is made.
+    """
     documents = state["documents"]
+    if not enabled:
+        return {"relevant_documents": documents, "filtered_documents": []}
     grades = get_grader().batch(
         [{"question": state["question"], "document": d.page_content} for d in documents]
     )

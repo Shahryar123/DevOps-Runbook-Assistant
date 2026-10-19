@@ -4,13 +4,14 @@ Run: uv run python scripts/draw_graph.py
 """
 
 from runbook_assistant.config import get_settings
-from runbook_assistant.graph.build import build_graph
+from runbook_assistant.graph.build import GraphOptions, build_graph
 
 
 def main() -> None:
     settings = get_settings()
     path = settings.graph_diagram_path
-    mermaid = build_graph(settings.max_retries).get_graph().draw_mermaid()
+    options = GraphOptions.from_settings(settings)
+    mermaid = build_graph(options).get_graph().draw_mermaid()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         "# Runbook Assistant Graph\n\n"

@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     router_model: str = "gpt-5.4-mini"
     grader_model: str = "gpt-5.4-mini"
     rewrite_model: str = "gpt-5.4-mini"
+    judge_model: str = "gpt-5.4-mini"
     embedding_model: str = "text-embedding-3-small"
 
     # Paths
@@ -61,11 +62,19 @@ class Settings(BaseSettings):
     # Router fallback when no topic fits; never valid as a runbook topic.
     general_topic: str = "general"
 
-    # LangGraph
+    # LangGraph feature flags: switch setups without code changes
+    routing_enabled: bool = True
+    grading_enabled: bool = True
     max_retries: int = 1
     graph_run_name: str = "runbook-graph"
     graph_tags: list[str] = ["milestone-4", "graph"]
     graph_diagram_path: Path = PROJECT_ROOT / "docs" / "graph.md"
+
+    # Evaluation (LangSmith)
+    eval_dataset_name: str = "runbook-assistant-eval"
+    eval_dataset_path: Path = PROJECT_ROOT / "evals" / "dataset.jsonl"
+    eval_max_concurrency: int = 4
+    eval_categories: list[str] = ["clear", "vague", "out_of_scope", "multi_runbook"]
 
     @property
     def router_topics(self) -> tuple[str, ...]:
