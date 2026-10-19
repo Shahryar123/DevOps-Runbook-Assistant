@@ -4,13 +4,15 @@ LLM-backed pieces (router, retriever, grader, rewriter, generator) are
 replaced with RunnableLambda fakes, so the real node and graph logic runs.
 """
 
+from uuid import uuid4
+
 import pytest
 from langchain_core.documents import Document
 from langchain_core.runnables import RunnableLambda
 from pydantic import ValidationError
 
 from runbook_assistant.config import Settings
-from runbook_assistant.graph import nodes
+from runbook_assistant.graph import build, nodes
 from runbook_assistant.graph.build import (
     GraphOptions,
     build_graph,
@@ -265,3 +267,34 @@ def test_router_schema_only_allows_configured_topics(settings: Settings) -> None
     # The JSON schema sent to the model is restricted to the same values.
     enum = route_model.model_json_schema()["properties"]["topic"]["enum"]
     assert enum == [*settings.runbook_topics, "general"]
+
+
+def test_ask_graph_uses_given_run_id_and_adds_tags(
+    monkeypatch: pytest.MonkeyPatch, settings: Settings
+) -> None:
+    """The caller's run_id becomes the LangSmith root run ID (for trace links
+    and feedback), and extra tags are added to the configured ones."""
+    seen: dict = {}
+
+    class FakeGraph:
+        def invoke(self, state: dict, config: dict) -> dict:
+            seen.update(config)
+            return {
+                "answer": "a",
+                "topic": "networking",
+                "search_queries": [state["question"]],
+                "retry_count": 0,
+            }
+
+    monkeypatch.setenv("LANGSMITH_TRACING", "false")  # restored after the test
+    monkeypatch.setattr(build, "get_settings", lambda: settings)
+    monkeypatch.setattr(build, "get_graph", lambda _: FakeGraph())
+    run_id = uuid4()
+
+    result = build.ask_graph("q", GraphOptions(), run_id=run_id, tags=["ui"])
+
+    assert seen["run_id"] == run_id
+    assert seen["tags"] == [*settings.graph_tags, "ui"]
+    assert result["run_id"] == run_id
+    assert result["latency_s"] >= 0
+    assert result["kept"] == []

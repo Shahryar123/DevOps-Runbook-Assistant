@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     langsmith_tracing: bool = False
     langsmith_api_key: SecretStr | None = None
     langsmith_project: str = "runbook-assistant"
+    # Web UI used for trace links (EU accounts: https://eu.smith.langchain.com).
+    langsmith_web_url: str = "https://smith.langchain.com"
 
     # Models
     answer_model: str = "gpt-5.4-mini"
@@ -69,6 +71,14 @@ class Settings(BaseSettings):
     graph_run_name: str = "runbook-graph"
     graph_tags: list[str] = ["milestone-4", "graph"]
     graph_diagram_path: Path = PROJECT_ROOT / "docs" / "graph.md"
+    chain_run_name: str = "runbook-chain"
+
+    # Streamlit UI
+    ui_title: str = "DevOps Runbook Assistant"
+    ui_default_setup: str = "graph_routing"
+    ui_tags: list[str] = ["ui"]  # added to UI runs, to filter them in LangSmith
+    max_question_chars: int = 500
+    feedback_key: str = "user_rating"
 
     # Evaluation (LangSmith)
     eval_dataset_name: str = "runbook-assistant-eval"

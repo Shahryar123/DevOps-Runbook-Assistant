@@ -10,7 +10,6 @@ and records the returned {"key", "score", "comment"}. score=None means
 An empty expected_sources list marks an out-of-scope question.
 """
 
-import re
 from functools import lru_cache
 
 from langchain_core.prompts import ChatPromptTemplate
@@ -19,25 +18,13 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from runbook_assistant.config import get_settings
-from runbook_assistant.rag import NO_ANSWER
+from runbook_assistant.rag import is_refusal
 
 EvalResult = dict[str, object]
 
 
 def result(key: str, score: float | None, comment: str) -> EvalResult:
     return {"key": key, "score": score, "comment": comment}
-
-
-def normalize(text: str) -> str:
-    """Lowercase, unify apostrophes, drop punctuation, collapse whitespace."""
-    text = text.lower().replace("’", "'")
-    text = re.sub(r"[^a-z0-9' ]+", " ", text)
-    return " ".join(text.split())
-
-
-def is_refusal(answer: str) -> bool:
-    """True if the answer is the fixed "I don't have a runbook for this" reply."""
-    return normalize(answer).startswith(normalize(NO_ANSWER))
 
 
 def is_out_of_scope(reference_outputs: dict) -> bool:

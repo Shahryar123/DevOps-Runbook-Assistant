@@ -15,8 +15,10 @@ from evals.evaluators import ALL_EVALUATORS
 from runbook_assistant.config import Settings, configure_tracing, get_settings
 from runbook_assistant.graph.build import GraphOptions, ask_graph
 from runbook_assistant.rag import ask_with_sources
+from runbook_assistant.service import SETUPS, options_for_setup
 
-SETUPS: dict[str, str] = {
+# Experiment name prefix for each setup in service.SETUPS.
+EXPERIMENT_PREFIXES: dict[str, str] = {
     "chain": "chain-baseline",
     "graph": "graph-no-routing",
     "graph_routing": "graph-routing",
@@ -46,20 +48,9 @@ class TracerNoiseFilter(logging.Filter):
         return True
 
 
-def graph_options(setup: str, settings: Settings) -> GraphOptions | None:
-    """None for the chain; otherwise routing from the setup, the rest from config."""
-    if setup == "chain":
-        return None
-    return GraphOptions(
-        routing_enabled=setup == "graph_routing",
-        grading_enabled=settings.grading_enabled,
-        max_retries=settings.max_retries,
-    )
-
-
 def experiment_prefix(setup: str, options: GraphOptions | None) -> str:
     """e.g. graph-routing, or graph-routing-nograde-r0 for non-default flags."""
-    prefix = SETUPS[setup]
+    prefix = EXPERIMENT_PREFIXES[setup]
     if options is None:
         return prefix
     if not options.grading_enabled:
@@ -161,12 +152,12 @@ def print_summary(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run a LangSmith experiment.")
-    parser.add_argument("--setup", choices=list(SETUPS), required=True)
+    parser.add_argument("--setup", choices=SETUPS, required=True)
     args = parser.parse_args()
 
     settings = get_settings()
     configure_tracing(settings)
-    options = graph_options(args.setup, settings)
+    options = options_for_setup(args.setup, settings)
 
     tracer_noise = TracerNoiseFilter()
     logging.getLogger("langchain_core.callbacks.manager").addFilter(tracer_noise)

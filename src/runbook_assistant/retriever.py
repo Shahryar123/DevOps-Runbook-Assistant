@@ -1,6 +1,7 @@
 """Embeddings, the Chroma vector store, and the retriever built on top of it."""
 
 import threading
+from typing import NamedTuple
 
 from langchain_chroma import Chroma
 from langchain_core.vectorstores import VectorStoreRetriever
@@ -46,6 +47,31 @@ def get_vector_store() -> Chroma:
                 persist_directory=str(settings.chroma_dir),
             )
         return _vector_store
+
+
+class RunbookInfo(NamedTuple):
+    title: str
+    source: str
+    topic: str
+
+
+def list_runbooks() -> list[RunbookInfo]:
+    """The runbooks currently in the vector store, one entry per file.
+
+    Reads only chunk metadata (no embeddings, no OpenAI call) and keeps one
+    entry per source file. An empty list means nothing has been ingested.
+    """
+    metadatas = get_vector_store().get(include=["metadatas"])["metadatas"]
+    unique = {
+        meta["source"]: RunbookInfo(
+            title=str(meta.get("title", meta["source"])),
+            source=str(meta["source"]),
+            topic=str(meta.get("topic", "")),
+        )
+        for meta in metadatas
+        if meta and "source" in meta
+    }
+    return sorted(unique.values(), key=lambda info: info.title.lower())
 
 
 def get_retriever(

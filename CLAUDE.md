@@ -24,6 +24,8 @@ AWS, Azure, CI/CD) using RAG over runbooks in data/runbooks/.
 - src/runbook_assistant/config.py — settings loaded via pydantic-settings
 - src/runbook_assistant/ingest.py — load, chunk, embed runbooks
 - src/runbook_assistant/graph/ — LangGraph state, nodes, graph builder
+- src/runbook_assistant/service.py — UI-facing logic (answer, trace link, feedback)
+- src/runbook_assistant/app.py — Streamlit chat UI (UI only; calls service.py)
 - evals/ — LangSmith datasets and evaluators
 - data/runbooks/ — markdown runbooks (source documents)
 

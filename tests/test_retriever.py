@@ -33,3 +33,21 @@ def test_vector_store_created_once_across_threads(
 
     assert len(created) == 1
     assert all(store is created[0] for store in stores)
+
+
+def test_list_runbooks_one_entry_per_file_sorted_by_title(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeStore:
+        def get(self, include: list[str]) -> dict:
+            assert include == ["metadatas"]  # metadata only, no embeddings
+            chunk_b = {"source": "b.md", "title": "Beta", "topic": "cicd"}
+            chunk_a = {"source": "a.md", "title": "alpha", "topic": "security"}
+            return {"metadatas": [chunk_b, chunk_a, chunk_b, None]}
+
+    monkeypatch.setattr(retriever, "get_vector_store", FakeStore)
+
+    assert retriever.list_runbooks() == [
+        retriever.RunbookInfo(title="alpha", source="a.md", topic="security"),
+        retriever.RunbookInfo(title="Beta", source="b.md", topic="cicd"),
+    ]
