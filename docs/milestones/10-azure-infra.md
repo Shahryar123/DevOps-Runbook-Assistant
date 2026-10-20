@@ -1,6 +1,6 @@
 # Milestone 10 — Azure infrastructure with Terraform (deployment Phase B)
 
-**Status:** Written and validated locally (`terraform fmt`, `init -backend=false`, `validate` pass; scripts parse). Nothing has been created in Azure yet. You run the bootstrap, plans and applies.
+**Status:** Done and verified in Azure (2026-10-20). Both stages were applied in `uksouth`, ingest ran in the Container Apps Job and built the `runbooks` index in Azure AI Search, and the app answers questions at its public URL. The fixes the first real deployment needed are listed under "Fixes from the first real run".
 **Goal:** Describe all Azure resources as code (Terraform, azurerm v5) and script every deployment step. The Phase A image then runs in Azure Container Apps against Azure AI Search, with managed identities and Key Vault instead of keys in files.
 
 Full details: [infra/README.md](../../infra/README.md) (architecture diagram, roles, state, stages, costs, teardown).
