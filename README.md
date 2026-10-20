@@ -39,7 +39,7 @@ By default the search database is a local Chroma folder. To use Azure AI Search 
 
 ## Deploy to Azure
 
-Terraform in [`infra/`](infra/README.md) creates the Azure resources (Container Apps, Container Registry, AI Search, Key Vault, logs, budget). PowerShell scripts in `infra/scripts/` run each step; the order is in [infra/README.md](infra/README.md#deploying-step-by-step).
+Terraform in [`infra/`](infra/README.md) creates the Azure resources (Container Apps, Container Registry, AI Search, Key Vault, logs, budget). PowerShell scripts in `infra/scripts/` run each step; the order is in [infra/README.md](infra/README.md#deploying-step-by-step). All commands on one page: [infra commands cheat sheet](docs/milestones/11-infra-commands.md).
 
 ## Folders
 
