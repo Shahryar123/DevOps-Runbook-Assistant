@@ -74,8 +74,12 @@ Invoke-Native { az storage account blob-service-properties update --account-name
 # 4. Data-plane role for you (shared keys are off, so this is the only way in).
 $me = Invoke-Native { az ad signed-in-user show --query id --output tsv }
 $role = 'Storage Blob Data Contributor'
-$assigned = Invoke-Native { az role assignment list --assignee $me --scope $saId --role $role --query 'length(@)' --output tsv }
-if ($assigned -eq '0') {
+# Count in PowerShell, not with a JMESPath like length(@): on Windows `az` is
+# a .cmd file and cmd.exe misreads the parentheses. The extra pipeline
+# unrolls the array (Windows PowerShell 5.1 returns a JSON array as one object).
+$json = Invoke-Native { az role assignment list --assignee $me --scope $saId --role $role --output json }
+$assignments = @(($json -join "`n" | ConvertFrom-Json) | Where-Object { $_ })
+if ($assignments.Count -eq 0) {
     Write-Host "Granting '$role' to you ..."
     Invoke-Native { az role assignment create --assignee-object-id $me --assignee-principal-type User `
         --role $role --scope $saId --output none } | Out-Null
