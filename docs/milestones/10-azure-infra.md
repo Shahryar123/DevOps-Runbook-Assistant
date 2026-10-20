@@ -104,6 +104,11 @@ After deploying:
 - **Scripts work in Windows PowerShell 5.1 and PowerShell 7.** Native calls go through `Invoke-Native { ... }`, which throws on a non-zero exit code; that's how they "stop on first error". `set-secrets.ps1` passes values via a temporary file and `--file`, never on a command line.
 - **Not yet tested against real Azure.** Expect small first-run fixes: role propagation timing, the ACR Tasks availability on your subscription, and Search RBAC on the free tier.
 
+### Fixes from the first real run
+- **`bootstrap-state.ps1`:** on Windows `az` is `az.cmd`, so arguments pass through cmd.exe, which broke on `--query 'length(@)'`. The role check now counts in PowerShell. Windows PowerShell 5.1 also returns a JSON array as a single object, so the array is unrolled before counting.
+- **Dockerfile:** ACR Tasks (`az acr build`) uses the classic Docker builder, which rejects `RUN --mount=type=cache` (BuildKit only). The cache mounts are removed; `UV_NO_CACHE=1` keeps uv's cache out of the layer, and Docker's layer cache still works.
+- **`.dockerignore`:** `az acr build` ignores patterns ending in `/`, so `infra/` (257 MB of Terraform provider binaries), `chroma_db/` and `tests/` were uploaded. The patterns no longer have trailing slashes, and the upload dropped from 68.5 MB to 0.4 MB. `.env` was never included.
+
 ## Next
 
 - Run the stages and fix anything the first real deployment turns up.

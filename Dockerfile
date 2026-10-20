@@ -19,11 +19,14 @@ FROM python:3.13.14-slim-trixie AS builder
 COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/
 
 # Compile .py -> .pyc once at build time (faster container start-up);
-# copy files instead of hard-linking (the cache is on another filesystem);
-# never download a separate Python: use the one in this image.
+# copy files instead of hard-linking; never download a separate Python: use
+# the one in this image; keep no uv download cache in the layer.
+# (No BuildKit cache mounts: Azure ACR Tasks builds with the classic builder,
+# which doesn't support RUN --mount. Docker's layer cache still applies.)
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    UV_PYTHON_DOWNLOADS=0
+    UV_PYTHON_DOWNLOADS=0 \
+    UV_NO_CACHE=1
 
 WORKDIR /app
 
@@ -33,15 +36,12 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 # --frozen: install exactly what uv.lock says (fail instead of re-resolving);
 # --no-dev: no pytest/ruff; --no-install-project: dependencies only for now.
-# The cache mount keeps uv's download cache between builds (not in the image).
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project
 
 # Now the project itself (README.md is needed to build the package metadata).
 COPY README.md ./
 COPY src ./src
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev
 
 # ---------------------------------------------------------------------------
 # Stage 2: runtime. Same base image, so the venv's Python links still work.
