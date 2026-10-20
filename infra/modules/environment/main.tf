@@ -12,5 +12,15 @@ resource "azurerm_container_app_environment" "this" {
   logs_destination           = "log-analytics"
   log_analytics_workspace_id = var.log_analytics_workspace_id
 
+  # Azure now creates every environment as a "workload profiles" environment
+  # with a built-in serverless profile named Consumption (what the app and
+  # job run on). Declaring it keeps code and Azure in sync; without it,
+  # Terraform plans to remove the profile, and removing all profiles forces
+  # the environment to be recreated. Counts don't apply to Consumption.
+  workload_profile {
+    name                  = "Consumption"
+    workload_profile_type = "Consumption"
+  }
+
   tags = var.tags
 }

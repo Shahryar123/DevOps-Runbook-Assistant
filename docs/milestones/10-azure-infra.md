@@ -108,6 +108,7 @@ After deploying:
 - **`bootstrap-state.ps1`:** on Windows `az` is `az.cmd`, so arguments pass through cmd.exe, which broke on `--query 'length(@)'`. The role check now counts in PowerShell. Windows PowerShell 5.1 also returns a JSON array as a single object, so the array is unrolled before counting.
 - **Dockerfile:** ACR Tasks (`az acr build`) uses the classic Docker builder, which rejects `RUN --mount=type=cache` (BuildKit only). The cache mounts are removed; `UV_NO_CACHE=1` keeps uv's cache out of the layer, and Docker's layer cache still works.
 - **`.dockerignore`:** `az acr build` ignores patterns ending in `/`, so `infra/` (257 MB of Terraform provider binaries), `chroma_db/` and `tests/` were uploaded. The patterns no longer have trailing slashes, and the upload dropped from 68.5 MB to 0.4 MB. `.env` was never included.
+- **Container Apps environment:** Azure creates every environment with a built-in `Consumption` workload profile. Since the code didn't declare it, the next plan wanted to remove it, and removing all profiles forces the environment to be recreated. The `environment` module now declares `workload_profile { name = "Consumption", workload_profile_type = "Consumption" }`.
 
 ## Next
 
