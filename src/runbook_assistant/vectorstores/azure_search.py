@@ -74,6 +74,10 @@ def make_credential(settings: Settings) -> AzureKeyCredential | TokenCredential:
     """API key if configured, else DefaultAzureCredential (Managed Identity)."""
     if settings.azure_search_api_key is not None:
         return AzureKeyCredential(settings.azure_search_api_key.get_secret_value())
+    # In Container Apps, AZURE_CLIENT_ID (set by Terraform) tells
+    # DefaultAzureCredential which user-assigned identity to use (id-app or
+    # id-job). It's an Azure SDK convention, read from the environment
+    # directly, so it isn't a Settings field.
     return DefaultAzureCredential()
 
 
