@@ -27,6 +27,27 @@ Assert-AzLogin | Out-Null
 $vault = Get-TfOutput 'key_vault_name'
 $secretNames = @('openai-api-key', 'langsmith-api-key')
 
+# Plausibility checks, so a bad paste is rejected instead of stored. (Pasting
+# into a hidden prompt in some terminals, e.g. VS Code with Windows
+# PowerShell, can keep only the first character.)
+$expected = @{
+    'openai-api-key'    = @{ Prefix = 'sk-';   MinLength = 40 }
+    'langsmith-api-key' = @{ Prefix = 'lsv2_'; MinLength = 40 }
+}
+
+function Test-SecretValue {
+    <# Returns $null if the value looks right, else a reason (never the value). #>
+    param([string] $Name, [string] $PlainValue)
+    $rule = $expected[$Name]
+    if ($PlainValue -match '\s') { return 'it contains spaces or line breaks' }
+    if ($PlainValue -match '[="'']') { return "it contains quotes or '=' (paste only the key itself)" }
+    if ($rule -and -not $PlainValue.StartsWith($rule.Prefix)) { return "it doesn't start with '$($rule.Prefix)'" }
+    if ($rule -and $PlainValue.Length -lt $rule.MinLength) {
+        return "it's only $($PlainValue.Length) characters (the paste may have been cut off)"
+    }
+    return $null
+}
+
 function Set-VaultSecret {
     <# Write one value to Key Vault through a temp file. #>
     param([string] $Name, [string] $PlainValue)
@@ -52,7 +73,12 @@ foreach ($name in $secretNames) {
     $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
     try {
         $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+        $problem = Test-SecretValue -Name $name -PlainValue $plain
+        if ($problem) {
+            throw "Not saved: the value for $name looks wrong because $problem. Nothing was changed for it; run the script again (try a different terminal if pasting fails)."
+        }
         Set-VaultSecret -Name $name -PlainValue $plain
+        Write-Host "    ($($plain.Length) characters, starts with '$($expected[$name].Prefix)')" -ForegroundColor DarkGray
     }
     finally {
         [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
