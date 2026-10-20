@@ -37,6 +37,10 @@ After changing runbooks: stop the app, run the ingest again, then start the app.
 
 By default the search database is a local Chroma folder. To use Azure AI Search instead, set `VECTOR_STORE=azure_search`, `AZURE_SEARCH_ENDPOINT` and `AZURE_SEARCH_INDEX_NAME` (and `AZURE_SEARCH_API_KEY` for local testing).
 
+## Deploy to Azure
+
+Terraform in [`infra/`](infra/README.md) creates the Azure resources (Container Apps, Container Registry, AI Search, Key Vault, logs, budget). PowerShell scripts in `infra/scripts/` run each step; the order is in [infra/README.md](infra/README.md#deploying-step-by-step).
+
 ## Folders
 
 | Folder | What's inside |
@@ -44,6 +48,7 @@ By default the search database is a local Chroma folder. To use Azure AI Search 
 | `src/runbook_assistant/` | The application code |
 | `data/runbooks/` | The troubleshooting guides the assistant learns from |
 | `scripts/` | Helper scripts (e.g. key check) |
+| `infra/` | Azure infrastructure as code (Terraform) and deployment scripts |
 | `tests/` | Automated tests |
 | `evals/` | Test questions and scoring used to measure answer quality in LangSmith |
 | `docs/milestones/` | One document per build step, explaining what changed and why |
@@ -59,6 +64,7 @@ By default the search database is a local Chroma folder. To use Azure AI Search 
 - [x] 7. [Guardrails](docs/milestones/07-guardrails.md)
 - [x] 8. [Ingest data pipeline](docs/milestones/08-data-pipeline.md)
 - [x] 9. [Containers and switchable vector store](docs/milestones/09-containers.md)
+- [x] 10. [Azure infrastructure with Terraform](docs/milestones/10-azure-infra.md)
 
 ## Try it
 

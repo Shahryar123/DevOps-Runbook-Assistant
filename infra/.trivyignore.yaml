@@ -1,0 +1,28 @@
+# Trivy misconfiguration exceptions. Only justified ones; each says why and
+# what would remove the need for it. Run from infra/:
+#
+#   trivy config --ignorefile .trivyignore.yaml --tf-vars environments/dev/dev.tfvars .
+#
+# If Trivy reports an ID in the long form (AVD-AZU-0013), the short IDs below
+# still match; add the long form only if your Trivy version needs it.
+
+misconfigurations:
+  # Key Vault has no network ACL (allow-list) block.
+  # Why: Container Apps on the Consumption plan without a VNet has no fixed
+  # outbound IP to allow, so an allow-list would block the app itself.
+  # Access is still Entra ID + RBAC only (no access policies, no keys).
+  # Remove when: the environment gets a VNet + private endpoint for Key Vault.
+  - id: AZU-0013
+    paths:
+      - "modules/keyvault/main.tf"
+    statement: "No fixed egress IPs on Consumption Container Apps; RBAC-only access. Revisit with VNet/private endpoints."
+
+  # Key Vault purge protection is off.
+  # Why: dev environment, destroyed and recreated often; purge protection
+  # can't be turned off once on and would block reusing the vault name for
+  # up to the retention period. Soft delete is still on (7 days).
+  # Controlled by kv_purge_protection_enabled: set true for prod.
+  - id: AZU-0016
+    paths:
+      - "modules/keyvault/main.tf"
+    statement: "Dev only; kv_purge_protection_enabled=true for prod."

@@ -143,4 +143,4 @@ uv run pytest            # 232 passed (no OpenAI or Azure calls)
 
 ## Next: Phase B
 
-Create the Azure resources: Container Registry, Container Apps environment, the app, the ingest **Job** (`parallelism: 1`), Azure AI Search, Key Vault, a managed identity with *Search Index Data Contributor* and *Search Service Contributor*, and Log Analytics. Then push the image and set the environment variables and secrets, with probes on `/_stcore/health`.
+Create the Azure resources: Container Registry, Container Apps environment, the app, the ingest **Job** (`parallelism: 1`), Azure AI Search, Key Vault, a managed identity with *Search Index Data Contributor* and *Search Service Contributor*, and Log Analytics. Then push the image and set the environment variables and secrets, with probes on `/_stcore/health`. Done in [Milestone 10](10-azure-infra.md) with Terraform.

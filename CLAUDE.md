@@ -23,6 +23,13 @@ AWS, Azure, CI/CD) using RAG over runbooks in data/runbooks/.
   - Stop the Streamlit app before ingesting, then restart it (local Chroma is single-process)
 - Docker (local): `docker compose build`, `docker compose run --rm ingest`, `docker compose up app`
   (one image: app by default, ingest with `python -m runbook_assistant.ingest`)
+- Infra (Terraform, from infra/; the user runs everything that touches Azure):
+  - `./scripts/bootstrap-state.ps1` (once), `./scripts/init.ps1`
+  - `./scripts/plan.ps1 [-DeployApps [-ImageTag <sha>]]` then `./scripts/apply.ps1` (applies the saved plan)
+  - `./scripts/set-secrets.ps1`, `./scripts/build-image.ps1`, `./scripts/run-ingest.ps1`
+  - `./scripts/destroy.ps1 [-AppsOnly]` (never touches the state backend)
+  - Local checks only: `terraform fmt -recursive`, `terraform init -backend=false`, `terraform validate`;
+    `tflint --recursive` and `trivy config` are run by the user
 - Test: `uv run pytest`
 - Lint: `uv run ruff check . --fix && uv run ruff format .`
 
@@ -34,6 +41,8 @@ AWS, Azure, CI/CD) using RAG over runbooks in data/runbooks/.
 - src/runbook_assistant/vectorstores/ — VectorIndex interface; Chroma and Azure AI Search
   adapters; factory picks one from VECTOR_STORE
 - Dockerfile, docker-compose.yml — container image and local compose setup
+- infra/ — Terraform (azurerm v5): root module, modules/, environments/dev (backend.hcl,
+  dev.tfvars: no secrets), scripts/ (PowerShell); see infra/README.md
 - src/runbook_assistant/graph/ — LangGraph state, nodes, graph builder
 - src/runbook_assistant/service.py — UI-facing logic (answer, trace link, feedback)
 - src/runbook_assistant/app.py — Streamlit chat UI (UI only; calls service.py)
@@ -49,6 +58,8 @@ AWS, Azure, CI/CD) using RAG over runbooks in data/runbooks/.
 - AZURE_SEARCH_ENDPOINT, AZURE_SEARCH_INDEX_NAME; AZURE_SEARCH_API_KEY optional
   (without it: DefaultAzureCredential / Managed Identity)
 - Config must work from environment variables alone (no .env in containers)
+- In Azure: AZURE_CLIENT_ID selects the user-assigned managed identity; API keys come from
+  Key Vault references; RATE_LIMIT_TRUST_FORWARDED_FOR=true behind Container Apps ingress
 
 ## Rules
 
@@ -57,6 +68,8 @@ AWS, Azure, CI/CD) using RAG over runbooks in data/runbooks/.
 - All config via config.py — no hardcoded keys, model names, or paths
 - Type hints everywhere; keep functions small
 - Never read or print .env contents
+- No secret values in .tf/.tfvars; never run terraform plan/apply/destroy or az commands that
+  change Azure — the user runs those
 - After each milestone, add docs/milestones/NN-<slug>.md covering: what changed (files),
   how it works, new concepts, how to run/verify, notes/decisions, next milestone.
   Then add a row to the Milestones table in README.md. Small changes within a

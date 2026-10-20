@@ -12,3 +12,18 @@ wheels/
 .venv/
 chroma_db/
 *.pyc
+# Terraform (infra/)
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfplan
+infra/tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+# Keep: infra/.terraform.lock.hcl (pins provider versions and checksums)

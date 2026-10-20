@@ -28,6 +28,7 @@ tests/
 evals/
 docs/
 scripts/
+infra/
 site/
 dist/
 build/
