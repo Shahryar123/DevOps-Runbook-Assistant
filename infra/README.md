@@ -145,7 +145,7 @@ terraform output app_url
 - **New code:** commit, run `build-image.ps1`, then `plan.ps1 -DeployApps` and `apply.ps1`. The new tag creates a new revision.
 - **Changed runbooks:** they're in the image, so build and deploy, then run `run-ingest.ps1`. Only changed files are re-embedded.
 - **Roll back:** `plan.ps1 -DeployApps -ImageTag <older sha>`, then `apply.ps1`.
-- **Rotate a key:** run `set-secrets.ps1`, then `az containerapp revision restart`.
+- **Rotate a key:** run `set-secrets.ps1`. It refreshes the app and job and restarts the app.
 
 ## Concepts
 
@@ -219,6 +219,8 @@ For a CI runner on Linux, add its checksums to the lock file once: `terraform pr
   ```
   You need push rights on the registry: Owner, Contributor or AcrPush.
 - **New revision stuck / "unable to fetch secret".** The Key Vault secret doesn't exist yet (run `set-secrets.ps1`) or the role hasn't propagated (wait, then restart the revision).
+- **Changed a secret but the app or job still uses the old value.** Container Apps caches Key Vault values and refreshes them about every 30 minutes. `set-secrets.ps1` forces a refresh: it re-applies the references and restarts the app. If you changed a secret another way, run `set-secrets.ps1` again with the same value, or wait 30 minutes.
+- **`openai.BadRequestError: Error code: 400` with no message.** The OpenAI key is malformed (cut off, quoted, or with spaces). Check its length in Key Vault without printing it: `(az keyvault secret show --vault-name <kv> -n openai-api-key --query value -o tsv).Length`.
 - **403 from Search on the first ingest or query.** Role propagation. Wait a few minutes and retry.
 - **Key Vault name conflict on re-create.** A soft-deleted vault with that name still exists. With purge protection off it's purged on destroy; otherwise wait out the retention period or change the prefix.
 - **Plan always shows a change to a container's `secret` block.** The provider recommends ignoring `value` when using `key_vault_secret_id`. If you see a persistent diff here, add `lifecycle { ignore_changes = [secret] }` to the module (secrets then change only by recreating the app).

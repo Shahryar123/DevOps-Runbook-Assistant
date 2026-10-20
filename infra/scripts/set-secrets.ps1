@@ -12,6 +12,11 @@
   Needs: stage 1 applied (the vault exists) and Key Vault Secrets Officer
   (granted by Terraform to owner_object_id / you).
 
+  Container Apps caches Key Vault values (refreshed about every 30 minutes).
+  So when a value changed and the app and job exist, the script re-applies
+  their secret references (same as Terraform's) and restarts the app, so the
+  new value is used right away.
+
 .PARAMETER IncludeSearchAdminKey
   Fallback only (search_local_auth_enabled = true): copy the Search admin key
   into the vault as search-admin-key, straight from Azure, without showing it.
@@ -63,6 +68,7 @@ function Set-VaultSecret {
     }
 }
 
+$changed = @()   # secret names written in this run
 Write-Host "Key Vault: $vault (input is hidden; empty = keep current value)" -ForegroundColor Cyan
 foreach ($name in $secretNames) {
     $secure = Read-Host -AsSecureString "Value for $name"
@@ -78,6 +84,7 @@ foreach ($name in $secretNames) {
             throw "Not saved: the value for $name looks wrong because $problem. Nothing was changed for it; run the script again (try a different terminal if pasting fails)."
         }
         Set-VaultSecret -Name $name -PlainValue $plain
+        $changed += $name
         Write-Host "    ($($plain.Length) characters, starts with '$($expected[$name].Prefix)')" -ForegroundColor DarkGray
     }
     finally {
@@ -92,10 +99,46 @@ if ($IncludeSearchAdminKey) {
     $key = Invoke-Native { az search admin-key show --service-name $searchName --resource-group $rg --query primaryKey --output tsv }
     try {
         Set-VaultSecret -Name 'search-admin-key' -PlainValue $key
+        $changed += 'search-admin-key'
     }
     finally { $key = $null }
 }
 
+# Container Apps caches Key Vault references and re-reads them only about
+# every 30 minutes. If the app and job exist, re-apply the same references
+# (identical to Terraform's, so no drift) to fetch the new values now, and
+# restart the app so its running replica gets them.
+if ($changed.Count -gt 0) {
+    $app = (Invoke-NativeQuiet { terraform -chdir="$InfraRoot" output -raw app_name }).Output
+    $job = (Invoke-NativeQuiet { terraform -chdir="$InfraRoot" output -raw job_name }).Output
+    if ($app -and $job) {
+        $rg = Get-TfOutput 'resource_group_name'
+        $kvUri = "https://$vault.vault.azure.net"
+        $targets = @(
+            @{ Kind = 'job'; Name = "$job" },
+            @{ Kind = 'app'; Name = "$app" }
+        )
+        foreach ($t in $targets) {
+            # The user-assigned identity attached to the app/job (its resource ID).
+            $json = if ($t.Kind -eq 'job') {
+                Invoke-Native { az containerapp job show -n $t.Name -g $rg --query identity.userAssignedIdentities -o json }
+            } else {
+                Invoke-Native { az containerapp show -n $t.Name -g $rg --query identity.userAssignedIdentities -o json }
+            }
+            $identity = (($json -join "`n") | ConvertFrom-Json).PSObject.Properties.Name | Select-Object -First 1
+            $refs = @($changed | ForEach-Object { "$_=keyvaultref:$kvUri/secrets/$_,identityref:$identity" })
+            Write-Host "Refreshing secret references on the $($t.Kind) $($t.Name) ..."
+            if ($t.Kind -eq 'job') {
+                Invoke-Native { az containerapp job secret set -n $t.Name -g $rg --secrets @refs --output none } | Out-Null
+            } else {
+                Invoke-Native { az containerapp secret set -n $t.Name -g $rg --secrets @refs --output none } | Out-Null
+                $rev = Invoke-Native { az containerapp show -n $t.Name -g $rg --query properties.latestRevisionName -o tsv }
+                Invoke-Native { az containerapp revision restart -n $t.Name -g $rg --revision $rev --output none } | Out-Null
+                Write-Host "  restarted revision $rev"
+            }
+        }
+    }
+}
+
 Write-Host ''
-Write-Host 'Done. A running app reads secrets at start-up; after changing a value, restart it:' -ForegroundColor Green
-Write-Host '  az containerapp revision restart -n <app_name> -g <resource_group> --revision <latest revision>'
+Write-Host 'Done.' -ForegroundColor Green

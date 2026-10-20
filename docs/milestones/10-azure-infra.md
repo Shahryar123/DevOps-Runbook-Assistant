@@ -110,6 +110,7 @@ After deploying:
 - **`.dockerignore`:** `az acr build` ignores patterns ending in `/`, so `infra/` (257 MB of Terraform provider binaries), `chroma_db/` and `tests/` were uploaded. The patterns no longer have trailing slashes, and the upload dropped from 68.5 MB to 0.4 MB. `.env` was never included.
 - **Container Apps environment:** Azure creates every environment with a built-in `Consumption` workload profile. Since the code didn't declare it, the next plan wanted to remove it, and removing all profiles forces the environment to be recreated. The `environment` module now declares `workload_profile { name = "Consumption", workload_profile_type = "Consumption" }`.
 - **`set-secrets.ps1`:** the first ingest failed with an empty OpenAI `400` because Key Vault held a 1-character key. A paste into the hidden prompt was cut off, which can happen with Windows PowerShell in the VS Code terminal. The script now rejects values that don't fit the expected pattern (prefix `sk-` / `lsv2_`, at least 40 characters, no spaces, quotes or `=`), and after saving it prints only the length.
+- **Key Vault reference cache:** even after the key was fixed, the job kept failing, because Container Apps caches Key Vault values for about 30 minutes. After saving, `set-secrets.ps1` now re-applies the app's and job's secret references (identical to Terraform's, so no drift) and restarts the app. With that, the first ingest succeeded and created the `runbooks` index.
 
 ## Next
 
