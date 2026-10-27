@@ -11,6 +11,7 @@ resource "azurerm_container_app_job" "this" {
   resource_group_name          = var.resource_group_name
   location                     = var.location
   container_app_environment_id = var.container_app_environment_id
+  workload_profile_name        = "Consumption" # see modules/containerapp
   replica_timeout_in_seconds   = var.timeout_seconds
   replica_retry_limit          = var.retry_limit # ingest is idempotent, so a retry is safe
   tags                         = var.tags

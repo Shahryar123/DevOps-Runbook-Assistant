@@ -95,6 +95,10 @@ variable "image_tag" {
     condition     = var.image_tag == null || var.image_tag != "latest"
     error_message = "Use an immutable tag (the git SHA), not 'latest': otherwise Terraform can't tell a new image from the old one."
   }
+  validation {
+    condition     = var.image_tag == null || can(regex("^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$", var.image_tag))
+    error_message = "image_tag must be a tag such as the git SHA (e.g. 116e3e5a526c), not a digest (sha256:...)."
+  }
 }
 
 variable "role_propagation_wait" {

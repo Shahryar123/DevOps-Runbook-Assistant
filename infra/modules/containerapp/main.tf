@@ -13,9 +13,12 @@ resource "azurerm_container_app" "this" {
   name                         = var.name
   resource_group_name          = var.resource_group_name
   container_app_environment_id = var.container_app_environment_id
-  revision_mode                = "Single"
-  max_inactive_revisions       = 3
-  tags                         = var.tags
+  # The environment's only profile (see modules/environment). Azure sets it
+  # anyway; declaring it stops Terraform planning to remove it.
+  workload_profile_name  = "Consumption"
+  revision_mode          = "Single"
+  max_inactive_revisions = 3
+  tags                   = var.tags
 
   identity {
     type         = "UserAssigned"

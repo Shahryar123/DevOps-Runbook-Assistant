@@ -97,6 +97,8 @@ New role assignments can take a few minutes to apply. If the first answer shows 
 - **The OpenAI key stays for now.** Moderation still calls OpenAI's moderation API, which is the only reason `openai-api-key` remains in Key Vault. The next milestone replaces it with Azure AI Content Safety, and then the key can go.
 - **Model version.** The `gpt-5.4-mini` deployment uses the model's current default version (`version = null`), and `version_upgrade_option = "NoAutoUpgrade"` keeps it fixed after creation. Pin a version in `foundry_deployments` once you've seen it in the portal or the `az` output.
 - **Content filters.** Deployments get Foundry's default content filter. If it blocks harmless DevOps text ("kill the process"), a custom RAI policy can be added in Terraform (`azurerm_cognitive_account_rai_policy`).
+- **Workload profile fix.** The app and job modules now set `workload_profile_name = "Consumption"`. Without it, every plan proposed removing the profile Azure had set (`"Consumption" -> null`).
+- **Image tag check.** `image_tag` now rejects digests (`sha256:...`). Pass the git SHA that `build-image.ps1` prints, never the digest from the `az acr build` output.
 - **Embeddings** are sent as plain strings with Foundry (`check_embedding_ctx_length=False`). Pre-tokenising is an OpenAI-only optimisation, and our chunks are far below the limit.
 
 ## Next milestone
