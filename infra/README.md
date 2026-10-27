@@ -25,7 +25,7 @@ flowchart LR
     end
 
     subgraph ai["rg-rbk-dev-ai"]
-        foundry[("Microsoft Foundry<br/>gpt-5.4-mini<br/>text-embedding-3-small")]
+        foundry[("Microsoft Foundry<br/>gpt-5.4-mini<br/>text-embedding-3-small<br/>Content Safety")]
         budgetai["Budget (models)"]
     end
 
@@ -42,11 +42,10 @@ flowchart LR
     idapp -- "Index Data Reader + Reader" --> search
     idjob -- "Index Data Contributor + Service Contributor" --> search
     cae -- logs --> log
-    idapp -- "OpenAI User" --> foundry
-    idjob -- "OpenAI User" --> foundry
-    app -- chat / embeddings --> foundry
-    job -- embeddings --> foundry
-    app -- moderation --> openai([OpenAI API])
+    idapp -- "OpenAI User + Cognitive Services User" --> foundry
+    idjob -- "OpenAI User + Cognitive Services User" --> foundry
+    app -- "chat / embeddings / moderation / Prompt Shields" --> foundry
+    job -- "embeddings / Prompt Shields" --> foundry
     app -- traces --> langsmith([LangSmith])
     tf([terraform, your az login]) -- state + lock --> st
 ```
@@ -86,6 +85,7 @@ Every role is scoped to the single resource, not the resource group.
 | id-job | Search Index Data Contributor | Search | Upload and delete documents |
 | id-job | Search Service Contributor | Search | Create, delete and reset the index (object definitions). It could also read admin keys, but keys are disabled on the service |
 | id-app, id-job | Cognitive Services OpenAI User | Foundry | Call the model deployments (no keys, no management rights) |
+| id-app, id-job, you | Cognitive Services User | Foundry | Content Safety: moderation and Prompt Shields (the job scans runbooks at ingest). The role could also list keys, but keys are disabled on the resource |
 | you | Key Vault Secrets Officer | Key Vault | Set the secrets |
 | you | Cognitive Services OpenAI User | Foundry | Call the models locally with `az login` (`LLM_PROVIDER=foundry`) |
 | you | Search Index Data Contributor + Search Service Contributor | Search | Inspect the index in the portal; run ingest or the app locally with `az login` |
@@ -111,11 +111,11 @@ The app's `secret` blocks hold a version-less Key Vault secret ID (`https://kv-â
 
 | Key Vault secret | Env var in the containers |
 |---|---|
-| `openai-api-key` | `OPENAI_API_KEY` |
+| `openai-api-key` (only if `llm_provider` or `moderation_provider` is `openai`) | `OPENAI_API_KEY` |
 | `langsmith-api-key` | `LANGSMITH_API_KEY` |
 | `search-admin-key` (fallback only) | `AZURE_SEARCH_API_KEY` |
 
-Plain settings (in `locals.tf`): `VECTOR_STORE=azure_search`, `RETRIEVAL_MODE=hybrid`, `AZURE_SEARCH_ENDPOINT`, `AZURE_SEARCH_INDEX_NAME=runbooks`, `LANGSMITH_TRACING=true`, `LANGSMITH_PROJECT=runbook-assistant-prod`, `LLM_PROVIDER=foundry`, `FOUNDRY_ENDPOINT`, `AZURE_CLIENT_ID` (each container's own identity), and for the app `RATE_LIMIT_TRUST_FORWARDED_FOR=true`. Container Apps ingress is a trusted proxy that sets `X-Forwarded-For`; without this setting every user would share the proxy's IP in the per-IP rate limit.
+Plain settings (in `locals.tf`): `VECTOR_STORE=azure_search`, `RETRIEVAL_MODE=hybrid`, `AZURE_SEARCH_ENDPOINT`, `AZURE_SEARCH_INDEX_NAME=runbooks`, `LANGSMITH_TRACING=true`, `LANGSMITH_PROJECT=runbook-assistant-prod`, `LLM_PROVIDER=foundry`, `FOUNDRY_ENDPOINT`, `MODERATION_PROVIDER=azure`, `PROMPT_SHIELDS_ENABLED=true`, `INJECTION_CLASSIFIER_ENABLED=false`, `AZURE_CLIENT_ID` (each container's own identity), and for the app `RATE_LIMIT_TRUST_FORWARDED_FOR=true`. Container Apps ingress is a trusted proxy that sets `X-Forwarded-For`; without this setting every user would share the proxy's IP in the per-IP rate limit.
 
 ## Deploying step by step
 

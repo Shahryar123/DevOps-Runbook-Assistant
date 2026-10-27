@@ -3,7 +3,8 @@
   Write the API keys into Key Vault without ever echoing or logging them.
 
 .DESCRIPTION
-  Prompts for each secret with Read-Host -AsSecureString (input hidden).
+  Prompts for each secret the containers use (terraform output
+  key_vault_secrets) with Read-Host -AsSecureString (input hidden).
   Leave a prompt empty to keep the current value. Each value is written to a
   temporary file (readable only by you, in your temp folder) and passed with
   --file, so it never appears on a command line, in the process list or in
@@ -30,7 +31,14 @@ param([switch] $IncludeSearchAdminKey)
 Assert-AzLogin | Out-Null
 
 $vault = Get-TfOutput 'key_vault_name'
+# Only the keys the containers reference (openai-api-key only while something
+# still calls api.openai.com; see uses_openai in locals.tf). search-admin-key
+# is handled by -IncludeSearchAdminKey below.
 $secretNames = @('openai-api-key', 'langsmith-api-key')
+$listed = Invoke-NativeQuiet { terraform -chdir="$InfraRoot" output -json key_vault_secrets }
+if ($listed.ExitCode -eq 0 -and $listed.Output) {
+    $secretNames = @((($listed.Output -join "`n") | ConvertFrom-Json) | Where-Object { $_ -ne 'search-admin-key' })
+}
 
 # Plausibility checks, so a bad paste is rejected instead of stored. (Pasting
 # into a hidden prompt in some terminals, e.g. VS Code with Windows

@@ -211,6 +211,15 @@ def status_error(cls: type[openai.APIStatusError], code: int) -> Exception:
         (openai.APIConnectionError(request=REQUEST), "Couldn't reach OpenAI"),
         (status_error(openai.AuthenticationError, 401), "API key"),
         (status_error(openai.PermissionDeniedError, 403), "Cognitive Services"),
+        (
+            openai.BadRequestError(
+                "boom",
+                response=httpx.Response(400, request=REQUEST),
+                body={"code": "content_filter"},
+            ),
+            "I can't help with that request",
+        ),
+        (status_error(openai.BadRequestError, 400), "OpenAI returned an error"),
         (status_error(openai.InternalServerError, 500), "OpenAI returned an error"),
         (ValueError("bug"), "Something went wrong"),
     ],

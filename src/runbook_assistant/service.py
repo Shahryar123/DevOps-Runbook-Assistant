@@ -26,6 +26,7 @@ from runbook_assistant.guardrails.rate_limit import (
     check_limits,
     limit_message,
 )
+from runbook_assistant.guardrails.replies import BLOCKED_REPLIES
 from runbook_assistant.guardrails.secrets import describe, mask_with_event
 from runbook_assistant.rag import ask_with_sources, get_chain, is_refusal
 from runbook_assistant.retriever import RunbookInfo, list_runbooks
@@ -251,6 +252,12 @@ def load_setup(setup: str) -> Runnable:
     return get_chain() if options is None else get_graph(options)
 
 
+def is_content_filtered(exc: Exception) -> bool:
+    """Foundry (Azure OpenAI) rejects a filtered prompt with HTTP 400 and
+    error code "content_filter"."""
+    return isinstance(exc, openai.BadRequestError) and exc.code == "content_filter"
+
+
 def friendly_error(exc: Exception) -> str:
     """A short message for the user. Callers log the full error separately."""
     # APITimeoutError is a subclass of APIConnectionError, so check it first.
@@ -273,6 +280,10 @@ def friendly_error(exc: Exception) -> str:
             "Access to the model was denied. With LLM_PROVIDER=foundry, check the "
             "'Cognitive Services OpenAI User' role on the Foundry resource."
         )
+    # Foundry's built-in content filter refused the prompt: show the same
+    # reply as our own moderation, not an error.
+    if is_content_filtered(exc):
+        return BLOCKED_REPLIES["moderation"]
     if isinstance(exc, openai.APIError):
         return "OpenAI returned an error. Please try again in a moment."
     return "Something went wrong while answering. The details are in the app log."

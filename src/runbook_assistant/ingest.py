@@ -26,6 +26,7 @@ from collections.abc import Sequence
 from langchain_core.embeddings import Embeddings
 
 from runbook_assistant.config import ConfigError, configure_tracing, get_settings
+from runbook_assistant.guardrails.prompt_shields import scan_documents
 from runbook_assistant.pipeline.report import format_report, make_token_counter
 from runbook_assistant.pipeline.run import (
     EXIT_VALIDATION,
@@ -78,6 +79,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     def index_factory(embeddings: Embeddings) -> VectorIndex:
         return open_index(settings, embeddings)
 
+    def scan(texts: Sequence[str]) -> list[bool]:
+        return scan_documents(texts, settings)
+
     report = run_pipeline(
         settings,
         source=LocalFolderSource(settings.runbooks_dir),
@@ -85,6 +89,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         index_factory=index_factory,
         count_tokens=make_token_counter(settings.embedding_model),
         options=options,
+        scan_documents=scan if settings.prompt_shields_enabled else None,
     )
     print(format_report(report))
     if report.mode == "sync":

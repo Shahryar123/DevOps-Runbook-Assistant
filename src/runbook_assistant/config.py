@@ -288,7 +288,24 @@ class Settings(BaseSettings):
     dangerous_commands: list[CommandRule] = DANGEROUS_COMMANDS
     injection_patterns: list[str] = INJECTION_PATTERNS
     injection_model: str = "gpt-5.4-mini"
-    moderation_model: str = "omni-moderation-latest"
+    moderation_model: str = "omni-moderation-latest"  # MODERATION_PROVIDER=openai
+
+    # Azure AI Content Safety (part of the Foundry resource: same endpoint,
+    # same Entra ID token). See guardrails/content_safety.py.
+    #   moderation_provider: openai (OpenAI moderation API) | azure (Content Safety)
+    #   prompt_shields_enabled: Azure jailbreak / document-attack detection on
+    #   the question (after the keyword check) and on runbooks at ingest.
+    moderation_provider: Literal["openai", "azure"] = "openai"
+    prompt_shields_enabled: bool = False
+    content_safety_api_version: str = "2024-09-01"
+    content_safety_timeout_s: float = 10.0
+    # Severity per category is 0, 2, 4 or 6. Block at >= this. 4 (medium) lets
+    # ordinary ops language ("kill the process", "terminate instances") through.
+    moderation_severity_threshold: int = 4
+    moderation_categories: list[str] = ["Hate", "SelfHarm", "Sexual", "Violence"]
+    # Limits for one Prompt Shields call when scanning runbook chunks.
+    prompt_shields_max_documents: int = 5
+    prompt_shields_max_chars: int = 9000
 
     # Rate limits (sliding windows, plus a daily cap that resets at midnight UTC)
     rate_limit_window_s: int = 600
@@ -330,16 +347,36 @@ class Settings(BaseSettings):
         extra = (self.off_topic_topic,) if self.off_topic_enabled else ()
         return (*self.runbook_topics, self.general_topic, *extra)
 
+    @property
+    def azure_moderation(self) -> bool:
+        return self.moderation_enabled and self.moderation_provider == "azure"
+
+    @property
+    def uses_openai(self) -> bool:
+        """Anything still calls api.openai.com (so OPENAI_API_KEY is needed)."""
+        openai_moderation = self.moderation_enabled and not self.azure_moderation
+        return self.llm_provider == "openai" or openai_moderation
+
+    @property
+    def uses_foundry(self) -> bool:
+        """Anything calls the Foundry endpoint (models or Content Safety)."""
+        return (
+            self.llm_provider == "foundry"
+            or self.azure_moderation
+            or self.prompt_shields_enabled
+        )
+
     @model_validator(mode="after")
     def check_required(self) -> "Settings":
         """Collect EVERY missing or conflicting setting into one error."""
         missing: list[str] = []
-        # Moderation still calls OpenAI directly, even with LLM_PROVIDER=foundry.
-        needs_openai_key = self.llm_provider == "openai" or self.moderation_enabled
-        if needs_openai_key and self.openai_api_key is None:
+        if self.uses_openai and self.openai_api_key is None:
             missing.append("OPENAI_API_KEY")
-        if self.llm_provider == "foundry" and not self.foundry_endpoint:
-            missing.append("FOUNDRY_ENDPOINT (needed when LLM_PROVIDER=foundry)")
+        if self.uses_foundry and not self.foundry_endpoint:
+            missing.append(
+                "FOUNDRY_ENDPOINT (needed for LLM_PROVIDER=foundry, "
+                "MODERATION_PROVIDER=azure or PROMPT_SHIELDS_ENABLED=true)"
+            )
         if self.vector_store == "azure_search":
             for name in ("azure_search_endpoint", "azure_search_index_name"):
                 if not getattr(self, name):

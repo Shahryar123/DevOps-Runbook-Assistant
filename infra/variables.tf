@@ -263,6 +263,29 @@ variable "llm_provider" {
   }
 }
 
+variable "moderation_provider" {
+  description = "MODERATION_PROVIDER for the containers: azure (Content Safety on the Foundry resource) or openai (needs openai-api-key in Key Vault)."
+  type        = string
+  default     = "azure"
+
+  validation {
+    condition     = contains(["azure", "openai"], var.moderation_provider)
+    error_message = "moderation_provider must be azure or openai."
+  }
+}
+
+variable "prompt_shields_enabled" {
+  description = "Prompt Shields on questions (jailbreaks) and on runbooks at ingest (document attacks)."
+  type        = bool
+  default     = true
+}
+
+variable "injection_classifier_enabled" {
+  description = "Also run the LLM injection classifier after Prompt Shields (one more model call per question)."
+  type        = bool
+  default     = false
+}
+
 variable "ai_budget_amount" {
   description = "Monthly budget for the Foundry resource group (model usage), in the billing currency."
   type        = number

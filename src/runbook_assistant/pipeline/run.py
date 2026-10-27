@@ -1,4 +1,8 @@
-"""Run the pipeline: validate -> plan -> (embed -> apply -> manifest) -> report.
+"""Run the pipeline: validate -> plan -> scan -> (embed -> apply -> manifest) -> report.
+
+Scan (optional): new and changed chunks are checked by Prompt Shields for
+hidden instructions before anything is embedded or written. A hit fails the
+run like a validation error; a failed scan fails it like a failed embedding.
 
 Dependencies (document source, embeddings, vector index, token counter) are
 passed in, so tests run the real pipeline with a fake embedding model and a
@@ -11,7 +15,7 @@ report file. It shows what WOULD happen, so you can check before paying.
 
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from typing import NamedTuple
 
@@ -49,6 +53,9 @@ from runbook_assistant.vectorstores.factory import index_exists as store_exists
 logger = logging.getLogger(__name__)
 
 EXIT_OK, EXIT_VALIDATION, EXIT_FAILED, EXIT_LOCKED = 0, 1, 2, 3
+
+# Chunk texts -> one flag per text: True = looks like an injection attack.
+DocumentScanner = Callable[[Sequence[str]], list[bool]]
 
 
 class PipelineOptions(NamedTuple):
@@ -98,6 +105,7 @@ def run_pipeline(
     count_tokens: TokenCounter,
     options: PipelineOptions | None = None,
     index_exists: Callable[[], bool] | None = None,
+    scan_documents: DocumentScanner | None = None,
 ) -> IngestReport:
     options = options or PipelineOptions()
     index = Index(index_factory, index_exists or (lambda: store_exists(settings)))
@@ -111,7 +119,16 @@ def run_pipeline(
     )
     report = IngestReport(mode=mode, started_at=now_iso())
     try:
-        _run(settings, source, embeddings_factory, index, count_tokens, options, report)
+        _run(
+            settings,
+            source,
+            embeddings_factory,
+            index,
+            count_tokens,
+            options,
+            report,
+            scan_documents,
+        )
     finally:
         report.duration_s = round(time.perf_counter() - start, 3)
         if mode == "sync":  # dry runs and validate-only write nothing
@@ -127,6 +144,7 @@ def _run(
     count_tokens: TokenCounter,
     options: PipelineOptions,
     report: IngestReport,
+    scan_documents: DocumentScanner | None = None,
 ) -> None:
     # 1. Validate everything before any change.
     docs = load_all(source)
@@ -169,7 +187,11 @@ def _run(
         report.chunks_total = manifest.chunk_total if manifest else 0
         return
 
-    # 3-5. Embed, apply, save the manifest: one writer at a time.
+    # 3. Scan what will be added (paid calls, so not in dry runs).
+    if scan_documents is not None and not _scan_ok(plan, scan_documents, report):
+        return
+
+    # 4-6. Embed, apply, save the manifest: one writer at a time.
     try:
         with writer_lock(settings):
             _embed_and_apply(
@@ -177,6 +199,37 @@ def _run(
             )
     except IngestLockedError as exc:
         report.status, report.exit_code, report.error = "locked", EXIT_LOCKED, str(exc)
+
+
+def _scan_ok(plan: SyncPlan, scan: DocumentScanner, report: IngestReport) -> bool:
+    """Scan every chunk to be embedded. False (report filled in) if any runbook
+    is flagged or the scan itself fails; nothing has been written either way."""
+    chunks = [(fc.source, c.page_content) for fc in plan.to_embed for c in fc.chunks]
+    try:
+        flags = scan([text for _, text in chunks])
+    except Exception as exc:
+        logger.exception("Prompt Shields scan failed")
+        report.status, report.exit_code = "failed", EXIT_FAILED
+        report.error = (
+            f"prompt shields scan failed ({type(exc).__name__}: {exc}); "
+            "nothing was written"
+        )
+        return False
+
+    flagged = sorted({s for (s, _), hit in zip(chunks, flags, strict=True) if hit})
+    if not flagged:
+        return True
+    report.validation_errors += [
+        {
+            "source": source,
+            "message": "Prompt Shields: contains instructions to the model "
+            "(document attack)",
+        }
+        for source in flagged
+    ]
+    report.status, report.exit_code = "validation_failed", EXIT_VALIDATION
+    report.error = "validation failed; nothing was changed"
+    return False
 
 
 def _embed_and_apply(

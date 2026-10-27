@@ -23,6 +23,7 @@ def no_guardrail_api_calls(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(input_guardrails, "moderate", network_call)
     monkeypatch.setattr(input_guardrails, "classify", network_call)
+    monkeypatch.setattr(input_guardrails, "is_prompt_attack", network_call)
 
 
 def make_doc(text: str) -> Document:

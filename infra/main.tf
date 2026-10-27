@@ -138,6 +138,10 @@ locals {
     app_search_definition = { scope = module.search.id, role = "Reader", principal = local.app_principal, type = "ServicePrincipal" }
     # Call the model deployments (chat + embeddings); no keys, no management.
     app_foundry_models = { scope = module.foundry.id, role = "Cognitive Services OpenAI User", principal = local.app_principal, type = "ServicePrincipal" }
+    # Content Safety (moderation, Prompt Shields) is a separate data action
+    # that the OpenAI User role doesn't include. This role could also list
+    # keys, but local auth is disabled on the Foundry resource.
+    app_foundry_safety = { scope = module.foundry.id, role = "Cognitive Services User", principal = local.app_principal, type = "ServicePrincipal" }
 
     # id-job: pull the image, read its secrets, write documents, and
     # create/delete/reset the index (Search Service Contributor).
@@ -146,6 +150,7 @@ locals {
     job_search_data    = { scope = module.search.id, role = "Search Index Data Contributor", principal = local.job_principal, type = "ServicePrincipal" }
     job_search_service = { scope = module.search.id, role = "Search Service Contributor", principal = local.job_principal, type = "ServicePrincipal" }
     job_foundry_models = { scope = module.foundry.id, role = "Cognitive Services OpenAI User", principal = local.job_principal, type = "ServicePrincipal" }
+    job_foundry_safety = { scope = module.foundry.id, role = "Cognitive Services User", principal = local.job_principal, type = "ServicePrincipal" } # Prompt Shields at ingest
 
     # You: set secrets; inspect the index and run ingest locally with az login.
     owner_kv_secrets     = { scope = module.keyvault.id, role = "Key Vault Secrets Officer", principal = local.owner_object_id, type = var.owner_principal_type }
@@ -153,6 +158,7 @@ locals {
     owner_search_service = { scope = module.search.id, role = "Search Service Contributor", principal = local.owner_object_id, type = var.owner_principal_type }
     # Call the models locally with az login (LLM_PROVIDER=foundry in .env).
     owner_foundry_models = { scope = module.foundry.id, role = "Cognitive Services OpenAI User", principal = local.owner_object_id, type = var.owner_principal_type }
+    owner_foundry_safety = { scope = module.foundry.id, role = "Cognitive Services User", principal = local.owner_object_id, type = var.owner_principal_type }
   }
 }
 

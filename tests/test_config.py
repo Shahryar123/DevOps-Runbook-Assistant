@@ -30,6 +30,8 @@ CONFIG_VARS = (
     "LLM_PROVIDER",
     "FOUNDRY_ENDPOINT",
     "MODERATION_ENABLED",
+    "MODERATION_PROVIDER",
+    "PROMPT_SHIELDS_ENABLED",
 )
 
 
@@ -117,3 +119,19 @@ def test_foundry_still_needs_openai_key_for_moderation(
     clean_env.setenv("MODERATION_ENABLED", "false")
     settings = load_settings(_env_file=None)  # no OpenAI key needed at all
     assert settings.openai_api_key is None
+
+
+def test_azure_moderation_needs_no_openai_key(clean_env: pytest.MonkeyPatch) -> None:
+    clean_env.setenv("LLM_PROVIDER", "foundry")
+    clean_env.setenv("FOUNDRY_ENDPOINT", "https://x.cognitiveservices.azure.com/")
+    clean_env.setenv("MODERATION_PROVIDER", "azure")
+    assert load_settings(_env_file=None).openai_api_key is None
+
+
+def test_content_safety_needs_the_foundry_endpoint(
+    clean_env: pytest.MonkeyPatch,
+) -> None:
+    clean_env.setenv("OPENAI_API_KEY", "sk-test")
+    clean_env.setenv("PROMPT_SHIELDS_ENABLED", "true")
+    with pytest.raises(ConfigError, match="FOUNDRY_ENDPOINT"):
+        load_settings(_env_file=None)

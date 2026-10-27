@@ -29,8 +29,13 @@ output "acr_login_server" {
 }
 
 output "key_vault_name" {
-  description = "Key Vault holding openai-api-key and langsmith-api-key."
+  description = "Key Vault holding the API keys (see key_vault_secrets)."
   value       = module.keyvault.name
+}
+
+output "key_vault_secrets" {
+  description = "Secrets the containers reference (set-secrets.ps1 prompts for these)."
+  value       = sort(keys(local.kv_secrets))
 }
 
 output "search_service_name" {

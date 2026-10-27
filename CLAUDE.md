@@ -47,7 +47,8 @@ AWS, Azure, CI/CD) using RAG over runbooks in data/runbooks/.
 - src/runbook_assistant/service.py — UI-facing logic (answer, trace link, feedback)
 - src/runbook_assistant/app.py — Streamlit chat UI (UI only; calls service.py)
 - src/runbook_assistant/guardrails/ — one module per guardrail (secrets, commands,
-  injection, moderation, rate_limit, input); patterns and flags live in config.py
+  injection, prompt_shields, moderation, rate_limit, input); content_safety.py is the
+  Azure AI Content Safety HTTP client; patterns and flags live in config.py
 - evals/ — LangSmith datasets and evaluators
 - data/runbooks/ — markdown runbooks (source documents)
 
@@ -55,6 +56,8 @@ AWS, Azure, CI/CD) using RAG over runbooks in data/runbooks/.
 
 - LLM_PROVIDER = openai (default) | foundry (Microsoft Foundry, FOUNDRY_ENDPOINT, Entra ID token;
   model names = deployment names); all models come from llm.py (get_chat_model, get_embeddings)
+- MODERATION_PROVIDER = openai (default) | azure; PROMPT_SHIELDS_ENABLED (default false):
+  Azure AI Content Safety on the Foundry endpoint (needs FOUNDRY_ENDPOINT)
 - VECTOR_STORE = chroma (default, local folder) | azure_search
 - RETRIEVAL_MODE = vector (default) | hybrid (keyword + vector; azure_search only)
 - AZURE_SEARCH_ENDPOINT, AZURE_SEARCH_INDEX_NAME; AZURE_SEARCH_API_KEY optional

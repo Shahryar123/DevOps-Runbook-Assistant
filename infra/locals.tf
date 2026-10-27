@@ -55,11 +55,11 @@ locals {
 
   # Key Vault secret name -> environment variable inside the containers.
   # The values are set with scripts/set-secrets.ps1, never in Terraform.
+  # The OpenAI key only while something still calls api.openai.com.
+  uses_openai = var.llm_provider == "openai" || var.moderation_provider == "openai"
   kv_secrets = merge(
-    {
-      "openai-api-key"    = "OPENAI_API_KEY"
-      "langsmith-api-key" = "LANGSMITH_API_KEY"
-    },
+    { "langsmith-api-key" = "LANGSMITH_API_KEY" },
+    local.uses_openai ? { "openai-api-key" = "OPENAI_API_KEY" } : {},
     var.search_local_auth_enabled ? { "search-admin-key" = "AZURE_SEARCH_API_KEY" } : {},
   )
 
@@ -83,6 +83,10 @@ locals {
     # Deployment names match the model names in config.py.
     LLM_PROVIDER     = var.llm_provider
     FOUNDRY_ENDPOINT = module.foundry.endpoint
+    # Guardrails on Azure AI Content Safety (same Foundry endpoint).
+    MODERATION_PROVIDER          = var.moderation_provider
+    PROMPT_SHIELDS_ENABLED       = tostring(var.prompt_shields_enabled)
+    INJECTION_CLASSIFIER_ENABLED = tostring(var.injection_classifier_enabled)
   }
 
   app_env = merge(local.common_env, {

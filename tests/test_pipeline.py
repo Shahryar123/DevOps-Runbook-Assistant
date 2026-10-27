@@ -29,6 +29,7 @@ from runbook_assistant.pipeline.run import (
     EXIT_LOCKED,
     EXIT_OK,
     EXIT_VALIDATION,
+    DocumentScanner,
     PipelineOptions,
     run_pipeline,
 )
@@ -117,7 +118,9 @@ class Env:
         data = self.store().get(include=["metadatas"])
         return dict(zip(data["ids"], data["metadatas"], strict=True))
 
-    def ingest(self, **options: bool) -> IngestReport:
+    def ingest(
+        self, scan: DocumentScanner | None = None, **options: bool
+    ) -> IngestReport:
         self.embeddings.embedded.clear()
         self.embeddings.calls = 0
         return run_pipeline(
@@ -127,6 +130,7 @@ class Env:
             index_factory=lambda emb: ChromaIndex(self.settings, emb),
             count_tokens=lambda texts: (sum(len(t) for t in texts) // 4, True),
             options=PipelineOptions(**options),
+            scan_documents=scan,
         )
 
 
@@ -153,6 +157,55 @@ def env(tmp_path: Path) -> Env:
 
 def ids_for(index: dict[str, dict], source: str) -> set[str]:
     return {cid for cid, meta in index.items() if meta["source"] == source}
+
+
+# --- Prompt Shields scan ---------------------------------------------------------------
+
+
+def test_scan_sees_only_new_and_changed_chunks(env: Env) -> None:
+    env.ingest()
+    env.write("dns.md", runbook("DNS failures v2"))
+    scanned: list[str] = []
+
+    def scan(texts: list[str]) -> list[bool]:
+        scanned.extend(texts)
+        return [False] * len(texts)
+
+    report = env.ingest(scan=scan)
+
+    assert report.exit_code == EXIT_OK
+    assert scanned and all("EC2" not in t for t in scanned)  # ec2.md unchanged
+
+
+def test_scan_hit_stops_before_any_write(env: Env) -> None:
+    def scan(texts: list[str]) -> list[bool]:
+        return ["EC2" in t for t in texts]
+
+    report = env.ingest(scan=scan)
+
+    assert report.exit_code == EXIT_VALIDATION
+    assert [e["source"] for e in report.validation_errors] == ["ec2.md"]
+    assert "Prompt Shields" in report.validation_errors[0]["message"]
+    assert env.embeddings.calls == 0
+    assert not env.settings.manifest_path.exists()
+
+
+def test_scan_failure_fails_the_run(env: Env) -> None:
+    def scan(_: list[str]) -> list[bool]:
+        raise ConnectionError("Content Safety down")
+
+    report = env.ingest(scan=scan)
+
+    assert report.exit_code == EXIT_FAILED
+    assert "prompt shields scan failed" in report.error
+    assert env.embeddings.calls == 0
+
+
+def test_dry_run_does_not_scan(env: Env) -> None:
+    def scan(_: list[str]) -> list[bool]:
+        raise AssertionError("dry runs make no paid calls")
+
+    assert env.ingest(scan=scan, dry_run=True).exit_code == EXIT_OK
 
 
 # --- Sync ------------------------------------------------------------------------------

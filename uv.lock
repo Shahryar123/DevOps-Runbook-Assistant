@@ -3144,6 +3144,7 @@ name = "runbook-assistant"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "httpx" },
     { name = "langchain" },
     { name = "langchain-azure-ai" },
     { name = "langchain-chroma" },
@@ -3164,6 +3165,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain", specifier = ">=1.4.6" },
     { name = "langchain-azure-ai", specifier = ">=1.2.10" },
     { name = "langchain-chroma", specifier = ">=1.1.0" },
