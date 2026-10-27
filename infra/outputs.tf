@@ -88,6 +88,16 @@ output "foundry_project_name" {
   value       = module.foundry.project_name
 }
 
+output "foundry_project_endpoint" {
+  description = "FOUNDRY_PROJECT_ENDPOINT for evals/foundry_evals.py."
+  value       = module.foundry.project_endpoint
+}
+
+output "foundry_content_filter" {
+  description = "Custom content filter (Guardrails in the Foundry portal) on the chat deployments."
+  value       = module.foundry.content_filter_name
+}
+
 output "foundry_deployments" {
   description = "Model deployment names (= the model names the app sends)."
   value       = module.foundry.deployment_names

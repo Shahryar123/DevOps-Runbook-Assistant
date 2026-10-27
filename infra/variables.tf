@@ -233,23 +233,37 @@ variable "foundry_location" {
 variable "foundry_deployments" {
   description = "Model deployments, keyed by deployment name. Keys must match the model names in config.py (ANSWER_MODEL, EMBEDDING_MODEL, ...). capacity = quota in thousands of tokens per minute."
   type = map(object({
-    model    = string
-    version  = optional(string)
-    format   = optional(string, "OpenAI")
-    sku      = optional(string, "GlobalStandard")
-    capacity = number
+    model          = string
+    version        = optional(string)
+    format         = optional(string, "OpenAI")
+    sku            = optional(string, "GlobalStandard")
+    capacity       = number
+    content_filter = optional(bool, false) # use content_filter below (chat models)
   }))
   default = {
     "gpt-5.4-mini" = {
-      model    = "gpt-5.4-mini"
-      version  = "2026-03-17" # the default Azure picked at creation; pinned
-      capacity = 50
+      model          = "gpt-5.4-mini"
+      version        = "2026-03-17" # the default Azure picked at creation; pinned
+      capacity       = 50
+      content_filter = true
     }
     "text-embedding-3-small" = {
       model    = "text-embedding-3-small"
       version  = "1"
       capacity = 50
     }
+  }
+}
+
+variable "content_filter" {
+  description = "Foundry content filter (guardrail) on the chat deployments: name, and the severity at which hate/sexual/violence/self-harm are blocked (Low = strictest, Medium = Azure's default, High = only the worst)."
+  type = object({
+    name               = string
+    severity_threshold = string
+  })
+  default = {
+    name               = "runbook-guardrails"
+    severity_threshold = "Medium"
   }
 }
 

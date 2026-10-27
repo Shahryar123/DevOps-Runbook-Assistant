@@ -30,6 +30,9 @@ AWS, Azure, CI/CD) using RAG over runbooks in data/runbooks/.
   - `./scripts/destroy.ps1 [-AppsOnly]` (never touches the state backend)
   - Local checks only: `terraform fmt -recursive`, `terraform init -backend=false`, `terraform validate`;
     `tflint --recursive` and `trivy config` are run by the user
+- Evals: LangSmith `uv run python -m evals.run_evals --setup graph_routing`;
+  Foundry `uv run --group foundry-evals python -m evals.foundry_evals --setup graph_routing`
+  (az login, FOUNDRY_PROJECT_ENDPOINT)
 - Test: `uv run pytest`
 - Lint: `uv run ruff check . --fix && uv run ruff format .`
 

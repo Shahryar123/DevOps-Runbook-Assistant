@@ -20,6 +20,21 @@ output "project_name" {
   value       = azurerm_cognitive_account_project.this.name
 }
 
+output "project_endpoint" {
+  description = "Foundry project endpoint used by the evaluation SDK."
+  value       = "https://${azurerm_cognitive_account.this.custom_subdomain_name}.services.ai.azure.com/api/projects/${azurerm_cognitive_account_project.this.name}"
+}
+
+output "project_principal_id" {
+  description = "Object ID of the project's managed identity (runs cloud evaluations)."
+  value       = azurerm_cognitive_account_project.this.identity[0].principal_id
+}
+
+output "content_filter_name" {
+  description = "Custom content filter on the chat deployments."
+  value       = azurerm_cognitive_account_rai_policy.this.name
+}
+
 output "deployment_names" {
   description = "Names of the model deployments."
   value       = keys(azurerm_cognitive_deployment.this)

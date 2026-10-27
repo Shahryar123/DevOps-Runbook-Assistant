@@ -107,6 +107,7 @@ module "foundry" {
   resource_group_name = azurerm_resource_group.ai.name
   location            = local.foundry_location
   deployments         = var.foundry_deployments
+  content_filter      = var.content_filter
   tags                = local.tags
 }
 
@@ -159,6 +160,12 @@ locals {
     # Call the models locally with az login (LLM_PROVIDER=foundry in .env).
     owner_foundry_models = { scope = module.foundry.id, role = "Cognitive Services OpenAI User", principal = local.owner_object_id, type = var.owner_principal_type }
     owner_foundry_safety = { scope = module.foundry.id, role = "Cognitive Services User", principal = local.owner_object_id, type = var.owner_principal_type }
+    # Run Foundry cloud evaluations (evals/foundry_evals.py) and see them in the portal.
+    owner_foundry_evals = { scope = module.foundry.id, role = "Foundry User", principal = local.owner_object_id, type = var.owner_principal_type }
+
+    # The project's own identity runs the evaluations in the cloud (calls the
+    # judge deployment, writes results). Microsoft's setup guide assigns it this.
+    project_foundry_evals = { scope = module.foundry.id, role = "Foundry User", principal = module.foundry.project_principal_id, type = "ServicePrincipal" }
   }
 }
 

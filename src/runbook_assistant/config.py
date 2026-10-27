@@ -327,6 +327,17 @@ class Settings(BaseSettings):
         "adversarial",
     ]
 
+    # Evaluation (Microsoft Foundry cloud evaluations, evals/foundry_evals.py).
+    # Results are stored in the Foundry project and shown on its Evaluation page.
+    # https://<account>.services.ai.azure.com/api/projects/<project>
+    foundry_project_endpoint: str | None = None
+    foundry_eval_model: str = "gpt-5.4-mini"  # judge: a deployment in that project
+    # Safety evaluators run on Microsoft's hosted models; not every region has
+    # them. Turn off if the safety run fails with a region error.
+    foundry_eval_safety: bool = True
+    foundry_eval_quality_name: str = "runbook-quality"
+    foundry_eval_safety_name: str = "runbook-safety"
+
     # Pipeline files live next to the Chroma data they describe.
     @property
     def manifest_path(self) -> Path:

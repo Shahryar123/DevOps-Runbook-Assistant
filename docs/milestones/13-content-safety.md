@@ -1,6 +1,6 @@
 # 13 — Azure AI Content Safety guardrails
 
-**Status:** code done and checked locally (tests, `terraform validate`). Not yet applied to Azure.
+**Status:** applied to Azure on 2026-10-27 (image `79b26c9b33d6`) and verified in the app.
 
 The input guardrails now run on **Azure AI Content Safety**, which is part of the Foundry resource from milestone 12: same endpoint, same managed identity, no key. Combined with milestone 12, nothing in Azure calls api.openai.com any more, so `openai-api-key` is no longer referenced by the app or the job.
 
@@ -101,4 +101,4 @@ Expect in the plan: **3 role assignments to add** (Cognitive Services User) and 
 
 ## Next milestone
 
-14 — Foundry evaluations: run groundedness and safety evaluators (and a red-teaming scan) against the deployed app, next to the existing LangSmith evals.
+14 — Foundry content filter and cloud evaluations: a custom guardrail policy in Terraform, and groundedness and safety evaluators in the Foundry project, next to the existing LangSmith evals.

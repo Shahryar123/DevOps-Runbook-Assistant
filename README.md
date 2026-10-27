@@ -66,7 +66,8 @@ Terraform in [`infra/`](infra/README.md) creates the Azure resources (Container 
 - [x] 9. [Containers and switchable vector store](docs/milestones/09-containers.md)
 - [x] 10. [Azure infrastructure with Terraform](docs/milestones/10-azure-infra.md)
 - [x] 12. [Microsoft Foundry models](docs/milestones/12-foundry-models.md)
-- [ ] 13. [Azure AI Content Safety guardrails](docs/milestones/13-content-safety.md)
+- [x] 13. [Azure AI Content Safety guardrails](docs/milestones/13-content-safety.md)
+- [ ] 14. [Foundry content filter and cloud evaluations](docs/milestones/14-foundry-guardrails-evals.md)
 
 ## Try it
 

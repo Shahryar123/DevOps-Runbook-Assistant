@@ -66,6 +66,7 @@ flowchart LR
 | Budget | `budget` | Emails at 80% and 100% of the monthly amount (alerts only; it never stops anything) |
 | Resource group `rg-rbk-dev-ai` | root | The model layer, separate so it can be costed and deleted on its own |
 | Microsoft Foundry resource + project + model deployments | `foundry` | Chat and embedding models in our subscription. Entra ID only (keys disabled). Deployments are named after their models, so the app's model names are the deployment names |
+| Content filter `runbook-guardrails` (RAI policy) | `foundry` | Foundry's own guardrail on the chat deployment: harm categories at `Medium`, Jailbreak blocked, Indirect Attack annotated, Protected Material text blocked / code annotated. Shown under **Guardrails** in the portal |
 | Budget (models) | `budget` | Same alerts for `rg-rbk-dev-ai` (`ai_budget_amount`) |
 | Role assignments + `time_sleep` | root | Connect identities to resources; wait for propagation before the app is created |
 
@@ -88,6 +89,8 @@ Every role is scoped to the single resource, not the resource group.
 | id-app, id-job, you | Cognitive Services User | Foundry | Content Safety: moderation and Prompt Shields (the job scans runbooks at ingest). The role could also list keys, but keys are disabled on the resource |
 | you | Key Vault Secrets Officer | Key Vault | Set the secrets |
 | you | Cognitive Services OpenAI User | Foundry | Call the models locally with `az login` (`LLM_PROVIDER=foundry`) |
+| you | Foundry User | Foundry | Run cloud evaluations (`evals/foundry_evals.py`) and see them in the portal |
+| Foundry project identity | Foundry User | Foundry | The project runs the cloud evaluations: calls the judge deployment and stores results |
 | you | Search Index Data Contributor + Search Service Contributor | Search | Inspect the index in the portal; run ingest or the app locally with `az login` |
 
 "You" means `owner_object_id`, or whoever runs Terraform if it's unset.

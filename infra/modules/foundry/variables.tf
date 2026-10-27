@@ -26,7 +26,22 @@ variable "deployments" {
     format   = optional(string, "OpenAI")
     sku      = optional(string, "GlobalStandard")
     capacity = number
+    # true = use the content filter below (chat models); false = the default.
+    content_filter = optional(bool, false)
   }))
+}
+
+variable "content_filter" {
+  description = "Custom content filter (RAI policy) for chat deployments. Renaming it replaces the policy."
+  type = object({
+    name               = string
+    severity_threshold = string # Low (strictest), Medium or High
+  })
+
+  validation {
+    condition     = contains(["Low", "Medium", "High"], var.content_filter.severity_threshold)
+    error_message = "severity_threshold must be Low, Medium or High."
+  }
 }
 
 variable "tags" {
