@@ -27,6 +27,9 @@ CONFIG_VARS = (
     "AZURE_SEARCH_API_KEY",
     "LANGSMITH_TRACING",
     "LANGSMITH_API_KEY",
+    "LLM_PROVIDER",
+    "FOUNDRY_ENDPOINT",
+    "MODERATION_ENABLED",
 )
 
 
@@ -93,3 +96,24 @@ def test_defaults_are_chroma_and_vector(clean_env: pytest.MonkeyPatch) -> None:
     settings = load_settings(_env_file=None)
     assert settings.vector_store == "chroma"
     assert settings.retrieval_mode == "vector"
+    assert settings.llm_provider == "openai"
+
+
+def test_foundry_needs_endpoint(clean_env: pytest.MonkeyPatch) -> None:
+    clean_env.setenv("OPENAI_API_KEY", "sk-test")
+    clean_env.setenv("LLM_PROVIDER", "foundry")
+    with pytest.raises(ConfigError, match="FOUNDRY_ENDPOINT"):
+        load_settings(_env_file=None)
+
+
+def test_foundry_still_needs_openai_key_for_moderation(
+    clean_env: pytest.MonkeyPatch,
+) -> None:
+    clean_env.setenv("LLM_PROVIDER", "foundry")
+    clean_env.setenv("FOUNDRY_ENDPOINT", "https://x.cognitiveservices.azure.com/")
+    with pytest.raises(ConfigError, match="OPENAI_API_KEY"):
+        load_settings(_env_file=None)
+
+    clean_env.setenv("MODERATION_ENABLED", "false")
+    settings = load_settings(_env_file=None)  # no OpenAI key needed at all
+    assert settings.openai_api_key is None

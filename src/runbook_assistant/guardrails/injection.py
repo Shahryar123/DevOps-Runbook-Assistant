@@ -24,10 +24,10 @@ from functools import lru_cache
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from runbook_assistant.config import get_settings
+from runbook_assistant.llm import get_chat_model
 
 
 class RunbookInjectionError(ValueError):
@@ -98,8 +98,7 @@ class InjectionVerdict(BaseModel):
 
 @lru_cache
 def get_classifier() -> Runnable:
-    settings = get_settings()
-    llm = ChatOpenAI(model=settings.injection_model, api_key=settings.openai_api_key)
+    llm = get_chat_model(get_settings().injection_model)
     return CLASSIFIER_PROMPT | llm.with_structured_output(InjectionVerdict)
 
 

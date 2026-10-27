@@ -12,7 +12,6 @@ from typing import Literal
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field, create_model
 
 from runbook_assistant.config import get_settings
@@ -25,6 +24,7 @@ from runbook_assistant.guardrails.events import guardrail_event
 from runbook_assistant.guardrails.input import run_input_guardrails
 from runbook_assistant.guardrails.replies import BLOCKED_REPLIES, OFF_TOPIC_REPLY
 from runbook_assistant.guardrails.secrets import mask_with_event
+from runbook_assistant.llm import get_chat_model
 from runbook_assistant.rag import NO_ANSWER, PROMPT, format_docs
 from runbook_assistant.retriever import get_retriever
 
@@ -73,7 +73,7 @@ def get_router() -> Runnable:
         f"- {name}: {description}"
         for name, description in settings.runbook_topics.items()
     )
-    llm = ChatOpenAI(model=settings.router_model, api_key=settings.openai_api_key)
+    llm = get_chat_model(settings.router_model)
     off_topic = (
         OFF_TOPIC_LINE.format(name=settings.off_topic_topic)
         if settings.off_topic_enabled
@@ -117,8 +117,7 @@ def get_grader() -> Runnable:
     Pydantic schema (via OpenAI's structured outputs), so we get a typed
     object with binary_score == "yes" | "no" instead of free text to parse.
     """
-    settings = get_settings()
-    llm = ChatOpenAI(model=settings.grader_model, api_key=settings.openai_api_key)
+    llm = get_chat_model(get_settings().grader_model)
     return GRADER_PROMPT | llm.with_structured_output(GradeDocument)
 
 
@@ -143,8 +142,7 @@ REWRITE_PROMPT = ChatPromptTemplate.from_messages(
 
 @lru_cache
 def get_rewriter() -> Runnable:
-    settings = get_settings()
-    llm = ChatOpenAI(model=settings.rewrite_model, api_key=settings.openai_api_key)
+    llm = get_chat_model(get_settings().rewrite_model)
     return REWRITE_PROMPT | llm | StrOutputParser()
 
 
@@ -154,8 +152,7 @@ def get_rewriter() -> Runnable:
 @lru_cache
 def get_generator() -> Runnable:
     """Same prompt as the Milestone 2 chain, so both answer by the same rules."""
-    settings = get_settings()
-    llm = ChatOpenAI(model=settings.answer_model, api_key=settings.openai_api_key)
+    llm = get_chat_model(get_settings().answer_model)
     return PROMPT | llm | StrOutputParser()
 
 

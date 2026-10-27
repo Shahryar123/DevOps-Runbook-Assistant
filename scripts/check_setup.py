@@ -1,13 +1,13 @@
-"""Verify that the OpenAI (and optionally LangSmith) keys in .env work.
+"""Verify that the model provider (OpenAI or Foundry) and LangSmith work.
 
 Run: uv run python scripts/check_setup.py
+With LLM_PROVIDER=foundry, run `az login` first.
 """
 
 import sys
 
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-
 from runbook_assistant.config import Settings, configure_tracing, get_settings
+from runbook_assistant.llm import get_chat_model, get_embeddings
 
 
 def check_chat(settings: Settings) -> bool:
@@ -17,7 +17,7 @@ def check_chat(settings: Settings) -> bool:
     For chat models the result is an AIMessage whose text is in .content.
     """
     try:
-        llm = ChatOpenAI(model=settings.answer_model, api_key=settings.openai_api_key)
+        llm = get_chat_model(settings.answer_model)
         reply = llm.invoke("Reply with exactly: OK")
         print(
             f"[PASS] chat ({settings.answer_model}): {str(reply.content).strip()[:50]}"
@@ -31,9 +31,7 @@ def check_chat(settings: Settings) -> bool:
 def check_embeddings(settings: Settings) -> bool:
     """OpenAIEmbeddings turns text into vectors; RAG uses these for similarity search."""
     try:
-        embeddings = OpenAIEmbeddings(
-            model=settings.embedding_model, api_key=settings.openai_api_key
-        )
+        embeddings = get_embeddings()
         vector = embeddings.embed_query("ping")
         print(
             f"[PASS] embeddings ({settings.embedding_model}): dimension={len(vector)}"
@@ -49,6 +47,7 @@ def check_embeddings(settings: Settings) -> bool:
 def main() -> int:
     settings = get_settings()
     configure_tracing(settings)
+    print(f"LLM provider: {settings.llm_provider}")
     print(f"LangSmith tracing: {'on' if settings.langsmith_tracing else 'off'}")
     results = [check_chat(settings), check_embeddings(settings)]
     return 0 if all(results) else 1

@@ -63,6 +63,31 @@ output "job_identity_client_id" {
   value       = module.identity.identities["job"].client_id
 }
 
+output "ai_resource_group_name" {
+  description = "Resource group holding the Foundry resource and its model deployments."
+  value       = azurerm_resource_group.ai.name
+}
+
+output "foundry_name" {
+  description = "Foundry resource name."
+  value       = module.foundry.name
+}
+
+output "foundry_endpoint" {
+  description = "FOUNDRY_ENDPOINT for the app (and for local testing with az login)."
+  value       = module.foundry.endpoint
+}
+
+output "foundry_project_name" {
+  description = "Foundry project (open it at https://ai.azure.com)."
+  value       = module.foundry.project_name
+}
+
+output "foundry_deployments" {
+  description = "Model deployment names (= the model names the app sends)."
+  value       = module.foundry.deployment_names
+}
+
 output "image" {
   description = "Image deployed to the app and job."
   value       = local.image

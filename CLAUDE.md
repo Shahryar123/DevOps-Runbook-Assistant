@@ -53,6 +53,8 @@ AWS, Azure, CI/CD) using RAG over runbooks in data/runbooks/.
 
 ## Key settings (environment variables; see config.py)
 
+- LLM_PROVIDER = openai (default) | foundry (Microsoft Foundry, FOUNDRY_ENDPOINT, Entra ID token;
+  model names = deployment names); all models come from llm.py (get_chat_model, get_embeddings)
 - VECTOR_STORE = chroma (default, local folder) | azure_search
 - RETRIEVAL_MODE = vector (default) | hybrid (keyword + vector; azure_search only)
 - AZURE_SEARCH_ENDPOINT, AZURE_SEARCH_INDEX_NAME; AZURE_SEARCH_API_KEY optional

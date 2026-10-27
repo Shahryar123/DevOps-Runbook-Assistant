@@ -28,5 +28,11 @@ langsmith_project = "runbook-assistant-prod"
 
 kv_purge_protection_enabled = false
 
+# Foundry (models). null = same region as everything else. Check that both
+# models are offered there (and your quota) before applying; see
+# docs/milestones/12-foundry-models.md. foundry_deployments uses its defaults.
+foundry_location = null
+ai_budget_amount = 10
+
 budget_amount       = 20
 budget_alert_emails = ["muhammadshahryar135@gmail.com"]

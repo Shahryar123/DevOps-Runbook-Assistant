@@ -65,6 +65,7 @@ Terraform in [`infra/`](infra/README.md) creates the Azure resources (Container 
 - [x] 8. [Ingest data pipeline](docs/milestones/08-data-pipeline.md)
 - [x] 9. [Containers and switchable vector store](docs/milestones/09-containers.md)
 - [x] 10. [Azure infrastructure with Terraform](docs/milestones/10-azure-infra.md)
+- [ ] 12. [Microsoft Foundry models](docs/milestones/12-foundry-models.md)
 
 ## Try it
 

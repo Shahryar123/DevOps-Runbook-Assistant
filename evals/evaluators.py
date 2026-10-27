@@ -18,6 +18,7 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from runbook_assistant.config import get_settings
+from runbook_assistant.llm import get_chat_model
 from runbook_assistant.rag import is_refusal
 
 EvalResult = dict[str, object]
@@ -128,8 +129,7 @@ Give a short reason naming any unsupported claims.""",
 
 @lru_cache
 def get_judge() -> ChatOpenAI:
-    settings = get_settings()
-    return ChatOpenAI(model=settings.judge_model, api_key=settings.openai_api_key)
+    return get_chat_model(get_settings().judge_model)
 
 
 def judge(prompt: ChatPromptTemplate, values: dict) -> JudgeScore:

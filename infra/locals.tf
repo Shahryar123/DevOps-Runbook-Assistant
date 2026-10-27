@@ -32,7 +32,14 @@ locals {
     id_app         = "id-${local.base}-app"
     id_job         = "id-${local.base}-job"
     budget         = "budget-${local.base}"
+
+    resource_group_ai = "rg-${local.base}-ai"
+    foundry           = "aif-${local.unique}" # also the endpoint's DNS name
+    foundry_project   = "proj-${local.base}"
+    budget_ai         = "budget-${local.base}-ai"
   }
+
+  foundry_location = coalesce(var.foundry_location, var.location)
 
   tags = merge(var.extra_tags, {
     app         = "runbook-assistant"
@@ -72,6 +79,10 @@ locals {
     AZURE_SEARCH_INDEX_NAME = var.search_index_name
     LANGSMITH_TRACING       = "true"
     LANGSMITH_PROJECT       = var.langsmith_project
+    # Chat + embeddings from Foundry with the managed identity (no key).
+    # Deployment names match the model names in config.py.
+    LLM_PROVIDER     = var.llm_provider
+    FOUNDRY_ENDPOINT = module.foundry.endpoint
   }
 
   app_env = merge(local.common_env, {

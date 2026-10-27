@@ -263,7 +263,16 @@ def friendly_error(exc: Exception) -> str:
     if isinstance(exc, openai.APIConnectionError):
         return "Couldn't reach OpenAI. Check your internet connection and try again."
     if isinstance(exc, openai.AuthenticationError):
-        return "OpenAI rejected the API key. Check OPENAI_API_KEY in your .env file."
+        return (
+            "The model provider rejected the API key or token. Check OPENAI_API_KEY "
+            "(or, with LLM_PROVIDER=foundry, your az login / managed identity)."
+        )
+    # Foundry: signed in, but the identity lacks the model-access role.
+    if isinstance(exc, openai.PermissionDeniedError):
+        return (
+            "Access to the model was denied. With LLM_PROVIDER=foundry, check the "
+            "'Cognitive Services OpenAI User' role on the Foundry resource."
+        )
     if isinstance(exc, openai.APIError):
         return "OpenAI returned an error. Please try again in a moment."
     return "Something went wrong while answering. The details are in the app log."

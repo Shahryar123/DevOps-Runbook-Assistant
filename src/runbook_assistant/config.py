@@ -186,6 +186,16 @@ class Settings(BaseSettings):
     # Web UI used for trace links (EU accounts: https://eu.smith.langchain.com).
     langsmith_web_url: str = "https://smith.langchain.com"
 
+    # LLM provider for chat and embeddings (see llm.py):
+    #   openai  -> api.openai.com with OPENAI_API_KEY (local default)
+    #   foundry -> Microsoft Foundry in our Azure subscription, Entra ID token
+    #              (Managed Identity in Azure, `az login` locally), no key.
+    # With foundry, every *_model below is a Foundry DEPLOYMENT name; Terraform
+    # names the deployments after their models, so the defaults work for both.
+    llm_provider: Literal["openai", "foundry"] = "openai"
+    foundry_endpoint: str | None = None  # https://<name>.cognitiveservices.azure.com/
+    foundry_token_scope: str = "https://cognitiveservices.azure.com/.default"
+
     # Models
     answer_model: str = "gpt-5.4-mini"
     router_model: str = "gpt-5.4-mini"
@@ -324,8 +334,12 @@ class Settings(BaseSettings):
     def check_required(self) -> "Settings":
         """Collect EVERY missing or conflicting setting into one error."""
         missing: list[str] = []
-        if self.openai_api_key is None:
+        # Moderation still calls OpenAI directly, even with LLM_PROVIDER=foundry.
+        needs_openai_key = self.llm_provider == "openai" or self.moderation_enabled
+        if needs_openai_key and self.openai_api_key is None:
             missing.append("OPENAI_API_KEY")
+        if self.llm_provider == "foundry" and not self.foundry_endpoint:
+            missing.append("FOUNDRY_ENDPOINT (needed when LLM_PROVIDER=foundry)")
         if self.vector_store == "azure_search":
             for name in ("azure_search_endpoint", "azure_search_index_name"):
                 if not getattr(self, name):

@@ -24,6 +24,11 @@ flowchart LR
         budget["Budget<br/>80% / 100% alerts"]
     end
 
+    subgraph ai["rg-rbk-dev-ai"]
+        foundry[("Microsoft Foundry<br/>gpt-5.4-mini<br/>text-embedding-3-small")]
+        budgetai["Budget (models)"]
+    end
+
     subgraph state["rg-runbook-tfstate (bootstrap, never destroyed)"]
         st[("Storage account<br/>tfstate container")]
     end
@@ -37,8 +42,11 @@ flowchart LR
     idapp -- "Index Data Reader + Reader" --> search
     idjob -- "Index Data Contributor + Service Contributor" --> search
     cae -- logs --> log
-    app -- chat / embeddings --> openai([OpenAI API])
-    job -- embeddings --> openai
+    idapp -- "OpenAI User" --> foundry
+    idjob -- "OpenAI User" --> foundry
+    app -- chat / embeddings --> foundry
+    job -- embeddings --> foundry
+    app -- moderation --> openai([OpenAI API])
     app -- traces --> langsmith([LangSmith])
     tf([terraform, your az login]) -- state + lock --> st
 ```
@@ -57,6 +65,9 @@ flowchart LR
 | Container App `ca-rbk-dev-app` | `containerapp` | The Streamlit UI, public HTTPS, scales to zero |
 | Container Apps Job `caj-rbk-dev-ingest` | `job` | Runs `python -m runbook_assistant.ingest` on demand from the same image |
 | Budget | `budget` | Emails at 80% and 100% of the monthly amount (alerts only; it never stops anything) |
+| Resource group `rg-rbk-dev-ai` | root | The model layer, separate so it can be costed and deleted on its own |
+| Microsoft Foundry resource + project + model deployments | `foundry` | Chat and embedding models in our subscription. Entra ID only (keys disabled). Deployments are named after their models, so the app's model names are the deployment names |
+| Budget (models) | `budget` | Same alerts for `rg-rbk-dev-ai` (`ai_budget_amount`) |
 | Role assignments + `time_sleep` | root | Connect identities to resources; wait for propagation before the app is created |
 
 Names follow `{type}-{prefix}-{env}[-{suffix}]`. The 4-character random suffix makes the globally unique names (Key Vault, ACR, Search) unique; ACR allows only letters and digits, so it becomes `acrrbkdev<suffix>`. Every resource is tagged `app`, `environment`, `owner`, `managedBy=terraform`.
@@ -74,7 +85,9 @@ Every role is scoped to the single resource, not the resource group.
 | id-job | AcrPull, Key Vault Secrets User | ACR, Key Vault | As above |
 | id-job | Search Index Data Contributor | Search | Upload and delete documents |
 | id-job | Search Service Contributor | Search | Create, delete and reset the index (object definitions). It could also read admin keys, but keys are disabled on the service |
+| id-app, id-job | Cognitive Services OpenAI User | Foundry | Call the model deployments (no keys, no management rights) |
 | you | Key Vault Secrets Officer | Key Vault | Set the secrets |
+| you | Cognitive Services OpenAI User | Foundry | Call the models locally with `az login` (`LLM_PROVIDER=foundry`) |
 | you | Search Index Data Contributor + Search Service Contributor | Search | Inspect the index in the portal; run ingest or the app locally with `az login` |
 
 "You" means `owner_object_id`, or whoever runs Terraform if it's unset.
@@ -102,7 +115,7 @@ The app's `secret` blocks hold a version-less Key Vault secret ID (`https://kv-â
 | `langsmith-api-key` | `LANGSMITH_API_KEY` |
 | `search-admin-key` (fallback only) | `AZURE_SEARCH_API_KEY` |
 
-Plain settings (in `locals.tf`): `VECTOR_STORE=azure_search`, `RETRIEVAL_MODE=hybrid`, `AZURE_SEARCH_ENDPOINT`, `AZURE_SEARCH_INDEX_NAME=runbooks`, `LANGSMITH_TRACING=true`, `LANGSMITH_PROJECT=runbook-assistant-prod`, `AZURE_CLIENT_ID` (each container's own identity), and for the app `RATE_LIMIT_TRUST_FORWARDED_FOR=true`. Container Apps ingress is a trusted proxy that sets `X-Forwarded-For`; without this setting every user would share the proxy's IP in the per-IP rate limit.
+Plain settings (in `locals.tf`): `VECTOR_STORE=azure_search`, `RETRIEVAL_MODE=hybrid`, `AZURE_SEARCH_ENDPOINT`, `AZURE_SEARCH_INDEX_NAME=runbooks`, `LANGSMITH_TRACING=true`, `LANGSMITH_PROJECT=runbook-assistant-prod`, `LLM_PROVIDER=foundry`, `FOUNDRY_ENDPOINT`, `AZURE_CLIENT_ID` (each container's own identity), and for the app `RATE_LIMIT_TRUST_FORWARDED_FOR=true`. Container Apps ingress is a trusted proxy that sets `X-Forwarded-For`; without this setting every user would share the proxy's IP in the per-IP rate limit.
 
 ## Deploying step by step
 

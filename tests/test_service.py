@@ -210,6 +210,7 @@ def status_error(cls: type[openai.APIStatusError], code: int) -> Exception:
         (openai.APITimeoutError(request=REQUEST), "too long"),
         (openai.APIConnectionError(request=REQUEST), "Couldn't reach OpenAI"),
         (status_error(openai.AuthenticationError, 401), "API key"),
+        (status_error(openai.PermissionDeniedError, 403), "Cognitive Services"),
         (status_error(openai.InternalServerError, 500), "OpenAI returned an error"),
         (ValueError("bug"), "Something went wrong"),
     ],

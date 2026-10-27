@@ -1,6 +1,7 @@
-# Root module: one resource group for the environment, the building blocks
-# (child modules in ./modules), the role assignments that connect them, and
-# the Container App + Job when deploy_apps = true.
+# Root module: one resource group for the environment, a second one for the
+# Foundry models, the building blocks (child modules in ./modules), the role
+# assignments that connect them, and the Container App + Job when
+# deploy_apps = true.
 #
 # Stages (see README.md):
 #   1. deploy_apps = false  -> base infrastructure
@@ -87,6 +88,37 @@ module "budget" {
   contact_emails    = var.budget_alert_emails
 }
 
+# --- Microsoft Foundry (models) ----------------------------------------------
+# Its own resource group: the model layer can be costed, locked down or
+# deleted separately from the app. Same state, so outputs and role
+# assignments wire straight into the app below.
+
+resource "azurerm_resource_group" "ai" {
+  name     = local.names.resource_group_ai
+  location = local.foundry_location
+  tags     = local.tags
+}
+
+module "foundry" {
+  source = "./modules/foundry"
+
+  name                = local.names.foundry
+  project_name        = local.names.foundry_project
+  resource_group_name = azurerm_resource_group.ai.name
+  location            = local.foundry_location
+  deployments         = var.foundry_deployments
+  tags                = local.tags
+}
+
+module "budget_ai" {
+  source = "./modules/budget"
+
+  name              = local.names.budget_ai
+  resource_group_id = azurerm_resource_group.ai.id
+  amount            = var.ai_budget_amount
+  contact_emails    = var.budget_alert_emails
+}
+
 # --- Role assignments (RBAC) --------------------------------------------------
 # Each entry: who (principal) gets which role on which single resource (scope).
 # Scoped to the resource, not the resource group: least privilege.
@@ -104,6 +136,8 @@ locals {
     # (GET /indexes/<name>), which the data reader role doesn't allow.
     # Reader = read-only control plane + object definitions; no keys, no writes.
     app_search_definition = { scope = module.search.id, role = "Reader", principal = local.app_principal, type = "ServicePrincipal" }
+    # Call the model deployments (chat + embeddings); no keys, no management.
+    app_foundry_models = { scope = module.foundry.id, role = "Cognitive Services OpenAI User", principal = local.app_principal, type = "ServicePrincipal" }
 
     # id-job: pull the image, read its secrets, write documents, and
     # create/delete/reset the index (Search Service Contributor).
@@ -111,11 +145,14 @@ locals {
     job_kv_secrets     = { scope = module.keyvault.id, role = "Key Vault Secrets User", principal = local.job_principal, type = "ServicePrincipal" }
     job_search_data    = { scope = module.search.id, role = "Search Index Data Contributor", principal = local.job_principal, type = "ServicePrincipal" }
     job_search_service = { scope = module.search.id, role = "Search Service Contributor", principal = local.job_principal, type = "ServicePrincipal" }
+    job_foundry_models = { scope = module.foundry.id, role = "Cognitive Services OpenAI User", principal = local.job_principal, type = "ServicePrincipal" }
 
     # You: set secrets; inspect the index and run ingest locally with az login.
     owner_kv_secrets     = { scope = module.keyvault.id, role = "Key Vault Secrets Officer", principal = local.owner_object_id, type = var.owner_principal_type }
     owner_search_data    = { scope = module.search.id, role = "Search Index Data Contributor", principal = local.owner_object_id, type = var.owner_principal_type }
     owner_search_service = { scope = module.search.id, role = "Search Service Contributor", principal = local.owner_object_id, type = var.owner_principal_type }
+    # Call the models locally with az login (LLM_PROVIDER=foundry in .env).
+    owner_foundry_models = { scope = module.foundry.id, role = "Cognitive Services OpenAI User", principal = local.owner_object_id, type = var.owner_principal_type }
   }
 }
 

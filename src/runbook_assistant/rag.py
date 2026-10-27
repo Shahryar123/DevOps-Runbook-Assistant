@@ -10,12 +10,12 @@ from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable, RunnableParallel, RunnablePassthrough
-from langchain_openai import ChatOpenAI
 
 from runbook_assistant.config import configure_tracing, get_settings
 from runbook_assistant.guardrails.events import GuardrailEvent
 from runbook_assistant.guardrails.replies import ALL_FIXED_REPLIES
 from runbook_assistant.guardrails.secrets import mask_with_event
+from runbook_assistant.llm import get_chat_model
 from runbook_assistant.retriever import get_retriever
 from runbook_assistant.tracing import tracer_callbacks
 
@@ -94,7 +94,7 @@ def get_chain() -> Runnable:
     settings = get_settings()
     configure_tracing(settings)
 
-    llm = ChatOpenAI(model=settings.answer_model, api_key=settings.openai_api_key)
+    llm = get_chat_model(settings.answer_model)
     generate = (
         RunnablePassthrough.assign(context=lambda x: format_docs(x["docs"]))
         | PROMPT

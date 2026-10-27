@@ -218,6 +218,53 @@ variable "langsmith_project" {
   default     = "runbook-assistant-prod"
 }
 
+# --- Microsoft Foundry (models) -----------------------------------------------
+
+variable "foundry_location" {
+  description = "Region of the Foundry resource and its resource group. null = same as location. Pick a region where the models are offered."
+  type        = string
+  default     = null
+}
+
+variable "foundry_deployments" {
+  description = "Model deployments, keyed by deployment name. Keys must match the model names in config.py (ANSWER_MODEL, EMBEDDING_MODEL, ...). capacity = quota in thousands of tokens per minute."
+  type = map(object({
+    model    = string
+    version  = optional(string)
+    format   = optional(string, "OpenAI")
+    sku      = optional(string, "GlobalStandard")
+    capacity = number
+  }))
+  default = {
+    "gpt-5.4-mini" = {
+      model    = "gpt-5.4-mini"
+      capacity = 50
+    }
+    "text-embedding-3-small" = {
+      model    = "text-embedding-3-small"
+      version  = "1"
+      capacity = 50
+    }
+  }
+}
+
+variable "llm_provider" {
+  description = "LLM_PROVIDER for the containers: foundry (models above, managed identity) or openai (rollback: api.openai.com with the Key Vault key)."
+  type        = string
+  default     = "foundry"
+
+  validation {
+    condition     = contains(["foundry", "openai"], var.llm_provider)
+    error_message = "llm_provider must be foundry or openai."
+  }
+}
+
+variable "ai_budget_amount" {
+  description = "Monthly budget for the Foundry resource group (model usage), in the billing currency."
+  type        = number
+  default     = 10
+}
+
 # --- Budget -------------------------------------------------------------------
 
 variable "budget_amount" {

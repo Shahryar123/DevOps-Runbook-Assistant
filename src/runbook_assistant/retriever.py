@@ -3,22 +3,12 @@
 from typing import NamedTuple
 
 from langchain_core.retrievers import BaseRetriever
-from langchain_openai import OpenAIEmbeddings
 
 from runbook_assistant.config import get_settings
+from runbook_assistant.llm import get_embeddings
 from runbook_assistant.vectorstores.factory import get_vector_index
 
-
-def get_embeddings() -> OpenAIEmbeddings:
-    """Embedding model shared by ingest and retrieval.
-
-    Both sides must use the same model, otherwise query vectors and stored
-    vectors live in different "spaces" and similarity search is meaningless.
-    """
-    settings = get_settings()
-    return OpenAIEmbeddings(
-        model=settings.embedding_model, api_key=settings.openai_api_key
-    )
+__all__ = ["RunbookInfo", "get_embeddings", "get_retriever", "list_runbooks"]
 
 
 class RunbookInfo(NamedTuple):
