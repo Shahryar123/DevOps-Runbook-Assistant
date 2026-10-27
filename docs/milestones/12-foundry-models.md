@@ -1,6 +1,6 @@
 # 12 — Microsoft Foundry models
 
-**Status:** code done and checked locally (tests, `terraform validate`). Not yet applied to Azure.
+**Status:** applied to Azure on 2026-10-27 (image `116e3e5a526c`, Foundry `aif-rbk-dev-vuj3` in `rg-rbk-dev-ai`).
 
 The chat and embedding models now come from **Microsoft Foundry** in our own Azure subscription instead of api.openai.com. The app and the ingest job sign in with their **managed identities**, so no API key is needed for the models. Foundry lives in its own resource group, `rg-rbk-dev-ai`.
 
