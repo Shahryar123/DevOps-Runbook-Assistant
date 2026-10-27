@@ -242,6 +242,7 @@ variable "foundry_deployments" {
   default = {
     "gpt-5.4-mini" = {
       model    = "gpt-5.4-mini"
+      version  = "2026-03-17" # the default Azure picked at creation; pinned
       capacity = 50
     }
     "text-embedding-3-small" = {
